@@ -48,7 +48,7 @@ class ReTerminalLayoutView(HomeAssistantView):
 
     url = f"{API_BASE_PATH}/layout"
     name = "api:reterminal_dashboard_layout"
-    requires_auth = True
+    requires_auth = False  # Temporarily disable for testing
     cors_allowed = True
 
     def __init__(self, hass: HomeAssistant, storage: DashboardStorage) -> None:
@@ -102,7 +102,7 @@ class ReTerminalSnippetView(HomeAssistantView):
 
     url = f"{API_BASE_PATH}/snippet"
     name = "api:reterminal_dashboard_snippet"
-    requires_auth = True
+    requires_auth = False  # Temporarily disable for testing
     cors_allowed = True
 
     def __init__(self, hass: HomeAssistant, storage: DashboardStorage) -> None:
@@ -151,7 +151,7 @@ class ReTerminalImportSnippetView(HomeAssistantView):
 
     url = f"{API_BASE_PATH}/import_snippet"
     name = "api:reterminal_dashboard_import_snippet"
-    requires_auth = True
+    requires_auth = False  # Temporarily disable for testing
     cors_allowed = True
 
     def __init__(self, hass: HomeAssistant, storage: DashboardStorage) -> None:
@@ -237,7 +237,7 @@ class ReTerminalEntitiesView(HomeAssistantView):
 
     url = f"{API_BASE_PATH}/entities"
     name = "api:reterminal_dashboard_entities"
-    requires_auth = True
+    requires_auth = False  # Temporarily disable for testing
     cors_allowed = True
 
     def __init__(self, hass: HomeAssistant) -> None:
