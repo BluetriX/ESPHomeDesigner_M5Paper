@@ -312,7 +312,7 @@ class ReTerminalTestView(HomeAssistantView):
 
     url = f"{API_BASE_PATH}/test"
     name = "api:reterminal_dashboard_test"
-    requires_auth = True
+    requires_auth = False  # Temporarily disable for testing
     cors_allowed = True
 
     def __init__(self, hass: HomeAssistant) -> None:
@@ -323,7 +323,7 @@ class ReTerminalTestView(HomeAssistantView):
         return self._json({
             "status": "ok", 
             "message": "reTerminal Dashboard API is working",
-            "user": str(getattr(request.get('hass_user'), 'name', 'unknown'))
+            "integration": "reterminal_dashboard"
         })
 
     def _json(self, data: Any, status_code: int = HTTPStatus.OK):

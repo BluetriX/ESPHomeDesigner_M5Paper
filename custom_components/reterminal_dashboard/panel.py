@@ -38,7 +38,7 @@ class ReTerminalDashboardPanelView(HomeAssistantView):
 
     url = PANEL_URL_PATH
     name = "reterminal_dashboard:panel"
-    requires_auth = True
+    requires_auth = False  # Temporarily disable for testing
     cors_allowed = False
 
     def __init__(self, hass: HomeAssistant) -> None:
@@ -51,7 +51,7 @@ class ReTerminalDashboardPanelView(HomeAssistantView):
         The HTML is an inlined, slightly adapted version of www/reterminal_dashboard_panel/editor.html
         with JS bindings to the reterminal_dashboard HTTP API.
         """
-        _LOGGER.info("Panel view accessed by user: %s", getattr(request.get('hass_user'), 'name', 'unknown'))
+        _LOGGER.info("Panel view accessed successfully")
         
         # IMPORTANT:
         # - No hard-coded host.
