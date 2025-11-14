@@ -49,34 +49,53 @@ class ReTerminalDashboardPanelView(HomeAssistantView):
     async def get(self, request) -> Any:  # type: ignore[override]
         """Return the full featured editor HTML.
         
-        This reads and serves the complete standalone editor.html from www/ directory.
+        This reads and serves the complete standalone editor.html.
+        Tries multiple locations in order of priority.
         """
-        _LOGGER.info("Panel view accessed successfully")
-        
-        # Try to read the full editor.html from www directory
-        import os
         from pathlib import Path
         
-        # Get the integration directory
-        integration_dir = Path(__file__).parent.parent.parent / "www" / "reterminal_dashboard_panel"
-        editor_path = integration_dir / "editor.html"
+        # Priority 1: Look in integration's own frontend/ directory (bundled with integration)
+        integration_dir = Path(__file__).parent / "frontend"
+        editor_path_integration = integration_dir / "editor.html"
         
-        if editor_path.exists():
+        # Priority 2: Look in /config/www/ (manual deployment or HACS plugin)
+        component_dir = Path(__file__).parent
+        config_dir = component_dir.parent.parent
+        editor_path_www = config_dir / "www" / "reterminal_dashboard_panel" / "editor.html"
+        
+        # Try integration directory first (preferred - always available)
+        if editor_path_integration.exists():
             try:
-                html = editor_path.read_text(encoding="utf-8")
-                _LOGGER.debug("Serving complete editor.html from: %s", editor_path)
+                html = editor_path_integration.read_text(encoding="utf-8")
+                _LOGGER.info("✓ Serving editor from integration: %s (%d bytes)", editor_path_integration, len(html))
                 return web.Response(
                     body=html,
                     status=200,
                     content_type="text/html",
                 )
             except Exception as e:
-                _LOGGER.error("Failed to read editor.html: %s", e)
-        else:
-            _LOGGER.warning("editor.html not found at: %s", editor_path)
+                _LOGGER.error("Failed to read editor from integration: %s", e)
         
-        # Fallback: generate embedded HTML
-        _LOGGER.info("Using embedded editor HTML")
+        # Try www directory (fallback for manual deployment)
+        if editor_path_www.exists():
+            try:
+                html = editor_path_www.read_text(encoding="utf-8")
+                _LOGGER.info("✓ Serving editor from www: %s (%d bytes)", editor_path_www, len(html))
+                return web.Response(
+                    body=html,
+                    status=200,
+                    content_type="text/html",
+                )
+            except Exception as e:
+                _LOGGER.error("Failed to read editor from www: %s", e)
+        
+        # Log where we looked
+        _LOGGER.error("❌ editor.html NOT FOUND at:")
+        _LOGGER.error("  1. %s", editor_path_integration)
+        _LOGGER.error("  2. %s", editor_path_www)
+        
+        # Fallback: This should NOT happen if files are deployed correctly
+        _LOGGER.error("FALLBACK: Using incomplete embedded HTML - features will be missing!")
         html = self._generate_full_editor_html()
         
         return web.Response(
@@ -958,33 +977,48 @@ class ReTerminalDashboardFontView(HomeAssistantView):
         """Serve the MDI font file."""
         from pathlib import Path
         
-        # Get the font file path
-        integration_dir = Path(__file__).parent.parent.parent / "www" / "reterminal_dashboard_panel"
-        font_path = integration_dir / "materialdesignicons-webfont.ttf"
+        # Priority 1: Integration's frontend directory (bundled)
+        integration_dir = Path(__file__).parent / "frontend"
+        font_path_integration = integration_dir / "materialdesignicons-webfont.ttf"
         
-        if not font_path.exists():
-            _LOGGER.error("Font file not found at: %s", font_path)
-            return web.Response(
-                body=b"Font file not found",
-                status=404,
-                content_type="text/plain",
-            )
+        # Priority 2: /config/www/ (manual deployment)
+        component_dir = Path(__file__).parent
+        config_dir = component_dir.parent.parent
+        font_path_www = config_dir / "www" / "reterminal_dashboard_panel" / "materialdesignicons-webfont.ttf"
         
-        try:
-            font_data = font_path.read_bytes()
-            _LOGGER.debug("Serving font file from: %s (%d bytes)", font_path, len(font_data))
-            return web.Response(
-                body=font_data,
-                status=200,
-                content_type="font/ttf",
-                headers={
-                    "Cache-Control": "public, max-age=31536000",  # Cache for 1 year
-                }
-            )
-        except Exception as e:
-            _LOGGER.error("Failed to read font file: %s", e)
-            return web.Response(
-                body=b"Failed to read font file",
-                status=500,
-                content_type="text/plain",
-            )
+        # Try integration directory first
+        if font_path_integration.exists():
+            try:
+                font_data = font_path_integration.read_bytes()
+                _LOGGER.debug("Serving font from integration: %s (%d bytes)", font_path_integration, len(font_data))
+                return web.Response(
+                    body=font_data,
+                    status=200,
+                    content_type="font/ttf",
+                    headers={"Cache-Control": "public, max-age=31536000"}
+                )
+            except Exception as e:
+                _LOGGER.error("Failed to read font from integration: %s", e)
+        
+        # Try www directory
+        if font_path_www.exists():
+            try:
+                font_data = font_path_www.read_bytes()
+                _LOGGER.debug("Serving font from www: %s (%d bytes)", font_path_www, len(font_data))
+                return web.Response(
+                    body=font_data,
+                    status=200,
+                    content_type="font/ttf",
+                    headers={"Cache-Control": "public, max-age=31536000"}
+                )
+            except Exception as e:
+                _LOGGER.error("Failed to read font from www: %s", e)
+        
+        _LOGGER.error("Font file not found at:")
+        _LOGGER.error("  1. %s", font_path_integration)
+        _LOGGER.error("  2. %s", font_path_www)
+        return web.Response(
+            body=b"Font file not found",
+            status=404,
+            content_type="text/plain",
+        )
