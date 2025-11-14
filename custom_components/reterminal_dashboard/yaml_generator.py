@@ -73,10 +73,11 @@ def generate_snippet(device: DeviceConfig) -> str:
     parts: List[str] = [SNIPPET_HEADER.rstrip(), ""]
 
     # Core pieces (ordered for readability)
+    # NOTE: output, rtttl, sensor, time are provided by hardware template
+    # We only generate: globals, fonts, text_sensor, button, script, display
     parts.append(_generate_globals())
     parts.append(_generate_fonts())
-    parts.append(_generate_outputs_and_buzzer())
-    parts.append(_generate_sensors_and_text_sensors(device))
+    parts.append(_generate_text_sensors(device))  # Only text_sensors for HA entities
     parts.append(_generate_navigation_buttons(device))
     parts.append(_generate_scripts(device))
     parts.append(_generate_display_block(device))
@@ -124,27 +125,13 @@ def _generate_fonts() -> str:
 """
 
 
-def _generate_outputs_and_buzzer() -> str:
-    # Based on reference: battery enable + buzzer LEDC
-    return """output:
-  - platform: gpio
-    pin: GPIO21
-    id: bsp_battery_enable
-
-  - platform: ledc
-    pin: GPIO45
-    id: buzzer_output
-
-rtttl:
-  id: reterminal_buzzer
-  output: buzzer_output
-"""
+# Removed _generate_outputs_and_buzzer() - now in hardware template
 
 
-def _generate_sensors_and_text_sensors(device: DeviceConfig) -> str:
+def _generate_text_sensors(device: DeviceConfig) -> str:
     """
-    Generate sensor and text_sensor blocks including HomeAssistant platform entries
-    for all sensor_text widgets found in the device's pages.
+    Generate ONLY text_sensor blocks for HomeAssistant entities used in sensor_text widgets.
+    sensor: section is now in the hardware template.
     """
     # Collect all unique entity_ids from sensor_text widgets
     entity_ids = set()
@@ -156,6 +143,9 @@ def _generate_sensors_and_text_sensors(device: DeviceConfig) -> str:
                 if entity_id:
                     entity_ids.add(entity_id)
     
+    if not entity_ids:
+        return "# No sensor_text widgets configured - no text_sensor section needed"
+    
     # Build text_sensor entries for each unique entity
     text_sensor_entries = []
     for entity_id in sorted(entity_ids):
@@ -166,44 +156,8 @@ def _generate_sensors_and_text_sensors(device: DeviceConfig) -> str:
     entity_id: {entity_id}
     internal: true""")
     
-    text_sensors_block = "\n".join(text_sensor_entries) if text_sensor_entries else """  # No sensor_text widgets configured yet.
-  # Add widgets in the editor to auto-generate HomeAssistant text_sensor entries."""
-    
-    return f"""sensor:
-  # Example onboard / derived sensors; adjust entity_ids or wiring as needed.
-  # Battery voltage (ADC)
-  - platform: adc
-    pin: GPIO1
-    name: "reTerminal Battery Voltage"
-    id: battery_voltage
-    update_interval: 60s
-    attenuation: 12db
-    filters:
-      - multiply: 2.0
-
-  - platform: template
-    name: "reTerminal Battery Level"
-    id: battery_level
-    lambda: 'return id(battery_voltage).state;'
-    unit_of_measurement: "%"
-    device_class: battery
-    update_interval: 60s
-    filters:
-      - calibrate_linear:
-          - 3.27 -> 0.0
-          - 4.15 -> 100.0
-      - clamp:
-          min_value: 0
-          max_value: 100
-
-  # WiFi signal as an example
-  - platform: wifi_signal
-    name: "reTerminal WiFi Signal"
-    id: wifi_rssi
-    update_interval: 60s
-
-text_sensor:
-{text_sensors_block}
+    return f"""text_sensor:
+{chr(10).join(text_sensor_entries)}
 """
 
 
@@ -263,11 +217,7 @@ def _generate_scripts(device: DeviceConfig) -> str:
     else:
         cases_block = "                  default:\n                    break;"
 
-    return f"""time:
-  - platform: homeassistant
-    id: ha_time
-
-script:
+    return f"""script:
   - id: manage_run_and_sleep
     mode: restart
     then:
