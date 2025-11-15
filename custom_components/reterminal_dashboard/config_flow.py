@@ -124,9 +124,11 @@ class ReTerminalDashboardOptionsFlow(config_entries.OptionsFlow):
             base_url = "http://homeassistant.local:8123"
 
         api_base = f"{base_url}{API_BASE_PATH}"
+        dashboard_url = f"{base_url}/reterminal-dashboard"
 
         # Provide a textual summary; options dict not used to drive logic yet.
         info_text = (
+            f"🎨 Dashboard Editor: {dashboard_url}\n\n"
             "reTerminal Dashboard Designer is configured.\n\n"
             "Use the following pattern in your ESPHome firmware for the reTerminal E1001:\n"
             f"  online_image URL: {api_base}" + "/{device_id}/page/{page}/image.png?token={api_token}\n\n"
@@ -146,5 +148,7 @@ class ReTerminalDashboardOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=schema,
-            description_placeholders={},
+            description_placeholders={
+                "dashboard_url": dashboard_url,
+            },
         )
