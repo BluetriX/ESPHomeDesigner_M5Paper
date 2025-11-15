@@ -48,6 +48,12 @@
 # esphome:
 #   name: reterminal
 #   friendly_name: reterminal
+#   on_boot:
+#     priority: 600
+#     then:
+#       - output.turn_on: bsp_battery_enable
+#       - delay: 200ms
+#       - component.update: epaper_display
 #
 # esp32:
 #   board: esp32-s3-devkitc-1
@@ -119,10 +125,14 @@ sensor:
       name: "reTerminal Onboard Temperature"
       id: onboard_temperature
       accuracy_decimals: 1
+      filters:
+        - round: 1
     humidity:
       name: "reTerminal Onboard Humidity"
       id: onboard_humidity
       accuracy_decimals: 1
+      filters:
+        - round: 1
     address: 0x44
     update_interval: 60s
 

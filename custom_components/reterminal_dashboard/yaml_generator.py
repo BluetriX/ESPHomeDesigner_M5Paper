@@ -98,10 +98,16 @@ def _generate_globals() -> str:
   - id: battery_glyph
     type: std::string
     restore_value: no
-    initial_value: "\\U000F0079"
+    initial_value: '"\\U000F0079"'
 
   # Default page refresh interval (seconds)
   - id: page_refresh_default_s
+    type: int
+    restore_value: no
+    initial_value: '900'
+
+  # Current computed refresh interval (seconds)
+  - id: page_refresh_current_s
     type: int
     restore_value: no
     initial_value: '900'
@@ -112,9 +118,13 @@ def _generate_fonts(device: DeviceConfig) -> str:
     """
     Generate font definitions including Material Design Icons fonts for icon widgets.
     Collects all icon codes from the device and generates appropriate MDI fonts.
+    Also generates image definitions for image widgets.
     """
     # Collect all unique icon codes from icon widgets
     icon_codes = set()
+    # Collect all unique image paths from image widgets
+    image_paths = {}
+    
     for page in device.pages:
         for widget in page.widgets:
             wtype = (widget.type or "").lower()
@@ -123,6 +133,14 @@ def _generate_fonts(device: DeviceConfig) -> str:
                 code = props.get("code", "").strip()
                 if code:
                     icon_codes.add(code)
+            elif wtype == "image":
+                props = widget.props or {}
+                path = props.get("path", "").strip()
+                if path:
+                    # Generate safe ID from path
+                    safe_id = path.replace("/", "_").replace(".", "_").replace("-", "_").replace(" ", "_")
+                    safe_id = f"img_{safe_id}"
+                    image_paths[path] = safe_id
     
     # Base fonts (Inter)
     font_lines = [
@@ -160,7 +178,18 @@ def _generate_fonts(device: DeviceConfig) -> str:
             f"    glyphs: [{glyph_list}]"
         ])
     
-    return "\n".join(font_lines)
+    result = "\n".join(font_lines)
+    
+    # Add image definitions if there are image widgets
+    if image_paths:
+        result += "\n\n\nimage:"
+        for path, img_id in sorted(image_paths.items()):
+            result += f"\n  - file: \"{path}\""
+            result += f"\n    id: {img_id}"
+            result += "\n    type: BINARY"
+            result += "\n    dither: FLOYDSTEINBERG"
+    
+    return result
 
 
 # Removed _generate_outputs_and_buzzer() - now in hardware template
@@ -202,7 +231,10 @@ def _generate_text_sensors(device: DeviceConfig) -> str:
 def _generate_navigation_buttons(device: DeviceConfig) -> str:
     # Template buttons for navigation and refresh.
     # These operate on display_page and let HA/ESPHome automations drive page changes.
-    return """button:
+    num_pages = len(device.pages)
+    
+    # Start with basic navigation buttons
+    buttons = ["""button:
   - platform: template
     name: "reTerminal Next Page"
     id: reterminal_next_page
@@ -224,9 +256,20 @@ def _generate_navigation_buttons(device: DeviceConfig) -> str:
     id: reterminal_refresh_display
     on_press:
       - component.update: epaper_display
-""".format(
-        pages=len(device.pages)
-    )
+""".format(pages=num_pages)]
+    
+    # Add "Go to Page X" buttons for each page
+    for idx in range(num_pages):
+        page_name = device.pages[idx].name if hasattr(device.pages[idx], 'name') and device.pages[idx].name else f"Page {idx}"
+        buttons.append(f"""
+  - platform: template
+    name: "reTerminal Go to {page_name}"
+    id: reterminal_goto_page_{idx}
+    on_press:
+      - lambda: 'id(display_page) = {idx};'
+      - component.update: epaper_display""")
+    
+    return "".join(buttons)
 
 
 def _generate_scripts(device: DeviceConfig) -> str:
@@ -272,8 +315,9 @@ def _generate_scripts(device: DeviceConfig) -> str:
                 if (interval < 60) {{
                   interval = 60;
                 }}
+                id(page_refresh_current_s) = interval;
                 ESP_LOGI("refresh", "Next refresh in %d seconds for page %d", interval, page);
-            - delay: !lambda 'return interval * 1000;'
+            - delay: !lambda 'return id(page_refresh_current_s) * 1000;'
             - component.update: epaper_display
             - script.execute: manage_run_and_sleep
           else:
@@ -518,19 +562,36 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
     if wtype == "line":
         dx = w
         dy = h
-        x2 = max(0, min(x + dx, IMAGE_WIDTH))
-        y2 = max(0, min(y + dy, IMAGE_HEIGHT))
-        stroke_width = int(props.get("stroke_width", 1) or 1)
-        if stroke_width <= 1:
-            dst.append(f"{indent}it.line({x}, {y}, {x2}, {y2}, {fg});")
-        else:
-            dst.append(f"{indent}// line with stroke_width={stroke_width}")
-            dst.append(f"{indent}for (int i = 0; i < {stroke_width}; i++) {{")
-            dst.append(f"{indent}  it.line({x}, {y}+i, {x2}, {y2}+i, {fg});")
-            dst.append(f"{indent}}}")
+        dst.append(f"{indent}it.line({x}, {y}, {x}+{dx}, {y}+{dy}, {fg});")
         return
 
-    # Static image widget: expects props.image_id to match an ESPHome image id
+    # Image widget
+    if wtype == "image":
+        path = props.get("path", "").strip()
+        if not path:
+            # No path configured - show placeholder
+            dst.append(f'{indent}// widget:image id:{widget.id} type:image x:{x} y:{y} w:{w} h:{h}')
+            dst.append(f'{indent}// No image path configured')
+            dst.append(f'{indent}it.rectangle({x}, {y}, {w}, {h}, {fg});')
+            return
+        
+        # Generate safe ID from path
+        safe_id = path.replace("/", "_").replace(".", "_").replace("-", "_").replace(" ", "_")
+        safe_id = f"img_{safe_id}"
+        
+        # Check if image should be inverted
+        invert = bool(props.get("invert"))
+        
+        # Add marker comment for parser
+        dst.append(f'{indent}// widget:image id:{widget.id} type:image x:{x} y:{y} w:{w} h:{h} path:"{path}" invert:{invert}')
+        
+        if invert:
+            dst.append(f'{indent}it.image({x}, {y}, id({safe_id}), COLOR_ON, COLOR_OFF);')
+        else:
+            dst.append(f'{indent}it.image({x}, {y}, id({safe_id}));')
+        return
+
+    # Fallback / unknown
     if wtype == "image":
         image_id = (props.get("image_id") or "").strip()
         if image_id:

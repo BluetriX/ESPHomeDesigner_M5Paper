@@ -81,7 +81,8 @@ Done! Your custom dashboard is now running on the reTerminal.
 - **Sensor Text** - Live values from Home Assistant entities
 - **Icon** - Material Design Icons (48x48)
 - **Shapes** - Rectangles, filled rectangles, circles, filled circles, lines
-- **More coming** - Weather cards, graphs, images...
+- **Image** - Display photos and images with optional color inversion
+- **More coming** - Weather cards, graphs...
 
 ## Features
 
@@ -101,6 +102,7 @@ The generator produces **additive YAML only** - it won't touch your WiFi, API, o
 **What it generates:**
 - `globals:` - Display page tracking, refresh intervals
 - `font:` - Inter fonts (sizes 19/22/24) + Material Design Icons with dynamic glyph collection
+- `image:` - Image definitions for photo/image widgets (BINARY type, FLOYDSTEINBERG dithering)
 - `text_sensor:` - Home Assistant entities used in your widgets
 - `button:` - Page navigation and refresh controls (exposed to HA)
 - `script:` - Smart refresh logic with per-page interval support

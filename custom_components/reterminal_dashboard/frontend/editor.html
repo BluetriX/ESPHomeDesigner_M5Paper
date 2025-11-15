@@ -674,6 +674,10 @@
           <span class="label">Line</span>
           <span class="tag">Shape</span>
         </div>
+        <div class="item" data-widget-type="image">
+          <span class="label">Image</span>
+          <span class="tag">Media</span>
+        </div>
       </div>
     </div>
 
@@ -1449,6 +1453,12 @@
         widget.height = 0;
         widget.props.stroke_width = 1;
         widget.props.color = "black";
+      } else if (type === "image") {
+        widget.type = "image";
+        widget.width = 200;
+        widget.height = 150;
+        widget.props.path = "";
+        widget.props.invert = false;
       }
 
       page.widgets.push(widget);
@@ -1690,6 +1700,46 @@
             el.style.height = strokeWidth + "px";
             el.style.width = (widget.width || 80) + "px";
             el.style.backgroundColor = colorValue;
+          }
+        } else if (type === "image") {
+          // Image widget - show placeholder or try to load image
+          const path = props.path || "";
+          const invert = !!props.invert;
+          
+          el.style.boxSizing = "border-box";
+          el.style.border = "2px dashed #aaaaaa";
+          el.style.backgroundColor = "#f5f5f5";
+          el.style.display = "flex";
+          el.style.alignItems = "center";
+          el.style.justifyContent = "center";
+          el.style.overflow = "hidden";
+          
+          if (path) {
+            // Try to load and display the image
+            const img = document.createElement("img");
+            img.style.maxWidth = "100%";
+            img.style.maxHeight = "100%";
+            img.style.objectFit = "contain";
+            
+            if (invert) {
+              img.style.filter = "invert(1)";
+            }
+            
+            img.onerror = () => {
+              // If image fails to load, show placeholder text
+              el.innerHTML = "<div style='text-align:center;color:#888;font-size:11px;padding:8px;'>🖼️<br/>" + path.split("/").pop() + "<br/>(not available in editor)</div>";
+            };
+            
+            img.src = path;
+            el.appendChild(img);
+          } else {
+            // No path specified - show empty placeholder
+            const placeholder = document.createElement("div");
+            placeholder.style.textAlign = "center";
+            placeholder.style.color = "#aaa";
+            placeholder.style.fontSize = "11px";
+            placeholder.textContent = "🖼️ Image\n(no path set)";
+            el.appendChild(placeholder);
           }
         } else {
           // Text widgets (text, sensor_text)
@@ -1935,6 +1985,30 @@
           renderCanvas();
           scheduleSnippetUpdate();
         });
+      }
+
+      if (type === "image") {
+        addLabeledInput("Image path", "text", widget.props.path || "", (v) => {
+          widget.props.path = v;
+          renderCanvas();
+        });
+        
+        const invertWrap = document.createElement("div");
+        invertWrap.className = "field";
+        const invertLbl = document.createElement("div");
+        invertLbl.className = "prop-label";
+        invertLbl.textContent = "Invert colors";
+        const invertCb = document.createElement("input");
+        invertCb.type = "checkbox";
+        invertCb.checked = !!widget.props.invert;
+        invertCb.addEventListener("change", () => {
+          widget.props.invert = invertCb.checked;
+          renderCanvas();
+          scheduleSnippetUpdate();
+        });
+        invertWrap.appendChild(invertLbl);
+        invertWrap.appendChild(invertCb);
+        panel.appendChild(invertWrap);
       }
 
       if (["text", "sensor_text"].includes(type)) {
