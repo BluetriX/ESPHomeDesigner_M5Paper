@@ -215,17 +215,8 @@ def _generate_fonts(device: DeviceConfig) -> str:
         
         # Generate a font for each unique size
         for size in sorted(icon_sizes):
-            # Determine font ID based on size category
-            if size <= 40:
-                font_id = f"font_mdi_small"
-            elif size <= 60:
-                font_id = f"font_mdi_medium"
-            else:
-                font_id = f"font_mdi_large"
-            
-            # For custom sizes, use size-specific ID
-            if size != 48 or font_id != "font_mdi_medium":
-                font_id = f"font_mdi_{size}"
+            # Always use size-specific ID for consistency
+            font_id = f"font_mdi_{size}"
             
             font_lines.extend([
                 "  - file: fonts/materialdesignicons-webfont.ttf",
@@ -539,18 +530,9 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         except (ValueError, OverflowError):
             icon_char = chr(0xF0595)  # Fallback
         
-        # Determine font based on size
+        # Determine font based on size - always use size-specific ID
         size = int(props.get("size", 48) or 48)
-        if size <= 40:
-            font_id = f"font_mdi_small"
-        elif size <= 60:
-            font_id = f"font_mdi_medium"
-        else:
-            font_id = f"font_mdi_large"
-        
-        # For custom sizes, use size-specific ID
-        if size != 48 or font_id != "font_mdi_medium":
-            font_id = f"font_mdi_{size}"
+        font_id = f"font_mdi_{size}"
         
         font_ref = props.get("font_ref", font_id)
         
