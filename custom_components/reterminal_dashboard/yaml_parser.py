@@ -37,6 +37,22 @@ import yaml
 from .models import DeviceConfig, PageConfig, WidgetConfig
 
 
+# Add custom constructor for ESPHome YAML tags like !lambda, !secret, etc.
+def _esphome_tag_constructor(loader, tag_suffix, node):
+    """Handle ESPHome custom tags by returning the value as-is."""
+    if isinstance(node, yaml.ScalarNode):
+        return loader.construct_scalar(node)
+    elif isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    elif isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node)
+    return None
+
+
+# Register multi-constructor for all ESPHome tags
+yaml.SafeLoader.add_multi_constructor('!', _esphome_tag_constructor)
+
+
 @dataclass
 class ParsedWidget:
     """Intermediate structure extracted from lambda lines."""
