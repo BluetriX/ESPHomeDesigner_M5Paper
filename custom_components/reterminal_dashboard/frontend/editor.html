@@ -270,18 +270,22 @@
 
     .canvas-wrap {
       display: flex;
+      flex-direction: row;
       gap: 8px;
       align-items: flex-start;
-      justify-content: flex-start;
+      justify-content: center;
       min-width: 0;
-      overflow: hidden;
-      flex: 0 0 auto;
+      overflow: auto;
+      flex: 1;
+      min-height: 0;
     }
 
     .canvas-area-wrapper {
       flex: 1;
       min-width: 0;
       display: flex;
+      align-items: flex-start;
+      justify-content: center;
     }
 
     .canvas-area {
@@ -339,6 +343,63 @@
     .canvas.portrait {
       width: 480px;
       height: 800px;
+    }
+
+    .right-panel {
+      width: 280px;
+      flex: 0 0 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+      padding: 10px;
+    }
+
+    .right-panel h3 {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    /* Responsive scaling for smaller screens */
+    @media (max-height: 900px) {
+      .canvas.portrait {
+        transform: scale(0.7);
+        transform-origin: top center;
+      }
+      .snippet-area {
+        min-height: 200px;
+      }
+    }
+
+    @media (max-width: 1600px) {
+      .snippet-area {
+        width: 700px;
+        max-width: 700px;
+      }
+    }
+
+    @media (max-width: 1400px) {
+      .canvas {
+        transform: scale(0.8);
+        transform-origin: top center;
+      }
+      .canvas.portrait {
+        transform: scale(0.6);
+        transform-origin: top center;
+      }
+      .snippet-area {
+        width: 600px;
+        max-width: 600px;
+      }
     }
 
     .canvas-grid {
@@ -463,15 +524,16 @@
     }
 
     .snippet-area {
-      margin-top: 6px;
       display: flex;
       flex-direction: column;
       gap: 4px;
       position: relative;
       overflow: hidden;
-      flex: 1;
-      min-height: 0;
-      max-width: 600px;
+      flex: 0 0 auto;
+      min-height: 300px;
+      width: 900px;
+      max-width: 900px;
+      margin: 0 auto;
     }
 
     .snippet-box {
@@ -1117,22 +1179,47 @@
         lines.pop();
       }
 
-      // Build default single-page layout
+      // Parse multiple pages from lambda
+      const pageMap = new Map(); // Map<pageIndex, widgets[]>
+      let currentPageIndex = null;
+
+      // First pass: detect page blocks
+      for (const line of lambdaLines) {
+        const pageMatch = line.match(/if\s*\(\s*id\s*\(\s*display_page\s*\)\s*==\s*(\d+)\s*\)/);
+        if (pageMatch) {
+          currentPageIndex = parseInt(pageMatch[1], 10);
+          if (!pageMap.has(currentPageIndex)) {
+            pageMap.set(currentPageIndex, []);
+          }
+        }
+      }
+
+      // If no pages detected, create default page 0
+      if (pageMap.size === 0) {
+        pageMap.set(0, []);
+      }
+
+      // Build layout with all detected pages
       const layout = {
         settings: {
           orientation: "landscape",
           dark_mode: false
         },
-        pages: [
-          {
-            id: "page_0",
-            name: "Imported",
-            widgets: []
-          }
-        ]
+        pages: Array.from(pageMap.entries()).sort((a, b) => a[0] - b[0]).map(([idx, _]) => ({
+          id: `page_${idx}`,
+          name: `Page ${idx + 1}`,
+          widgets: []
+        }))
       };
 
-      const widgets = layout.pages[0].widgets;
+      // Track current page for widget assignment
+      currentPageIndex = 0;
+      
+      // Helper to get current page's widgets array
+      function getCurrentPageWidgets() {
+        const page = layout.pages.find((p, idx) => idx === currentPageIndex);
+        return page ? page.widgets : layout.pages[0].widgets;
+      }
       
       // Helper to parse widget marker comments
       // Format: // widget:TYPE id:ID type:TYPE x:X y:Y w:W h:H [additional props]
@@ -1164,6 +1251,16 @@
       for (const cmd of lambdaLines) {
         const trimmed = cmd.trim();
         if (!trimmed || trimmed.startsWith("#")) continue;
+
+        // Check for page switches: if (id(display_page) == N)
+        const pageMatch = trimmed.match(/if\s*\(\s*id\s*\(\s*display_page\s*\)\s*==\s*(\d+)\s*\)/);
+        if (pageMatch) {
+          currentPageIndex = parseInt(pageMatch[1], 10);
+          continue;
+        }
+
+        // Get widgets array for current page
+        const widgets = getCurrentPageWidgets();
 
         // Skip rendering code (it.rectangle, it.printf, etc.) after a widget marker
         if (skipRendering) {
@@ -1399,11 +1496,23 @@
         // Ignore other commands in offline mode.
       }
 
+      console.log("parseSnippetYamlOffline result:", JSON.stringify({
+        pageCount: layout.pages.length,
+        widgetCounts: layout.pages.map(p => p.widgets.length)
+      }));
+
       return layout;
     }
 
     // Apply imported layout object (from backend or offline parser) into current editor state.
     function applyImportedLayout(layout) {
+      console.log("applyImportedLayout called with:", JSON.stringify({
+        hasLayout: !!layout,
+        hasPages: !!layout?.pages,
+        pageCount: layout?.pages?.length,
+        widgetCounts: layout?.pages?.map(p => p.widgets?.length || 0)
+      }));
+
       if (!layout || !Array.isArray(layout.pages)) {
         throw new Error("invalid_layout");
       }
@@ -1423,6 +1532,13 @@
       }
       settings = layout.settings || settings || {};
       currentPageIndex = 0;
+
+      console.log("After mapping pages:", JSON.stringify({
+        pageCount: pages.length,
+        widgetCounts: pages.map(p => p.widgets.length),
+        firstPageWidgets: pages[0]?.widgets.map(w => ({ id: w.id, type: w.type }))
+      }));
+
       rebuildWidgetsIndex();
       applyOrientation(settings.orientation || "landscape");
       renderPagesSidebar();
