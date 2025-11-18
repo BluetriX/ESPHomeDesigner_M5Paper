@@ -413,13 +413,13 @@ def _generate_navigation_buttons(device: DeviceConfig) -> str:
 def _generate_scripts(device: DeviceConfig) -> str:
     """
     Generate time + manage_run_and_sleep script with per-page refresh support.
-    Includes night-time power saving logic (00:01 - 05:00).
+    Includes night-time power saving logic if enabled.
 
     Semantics:
     - A global default interval (page_refresh_default_s).
     - Inline switch(page) using PageConfig.refresh_s values when provided.
     - Enforce a minimum of 60 seconds for any effective interval.
-    - Night mode: Deep sleep between 00:01 and 05:00, waking only at top of hour.
+    - Night mode: Deep sleep between start_hour and end_hour, waking only at top of hour.
     """
     case_lines: List[str] = []
     for idx, page in enumerate(device.pages):
@@ -438,16 +438,20 @@ def _generate_scripts(device: DeviceConfig) -> str:
     else:
         cases_block = "                  default:\n                    break;"
 
-    return f"""script:
-  - id: manage_run_and_sleep
-    mode: restart
-    then:
-      - wait_until:
-          condition:
-            lambda: 'return id(ha_time).now().is_valid();'
-          timeout: 120s
-      
-      # Night Mode Check (00:01 - 05:00)
+    # Sleep logic
+    sleep_logic = ""
+    if getattr(device, "sleep_enabled", False):
+        start_h = int(getattr(device, "sleep_start_hour", 0))
+        end_h = int(getattr(device, "sleep_end_hour", 5))
+        
+        # Handle wrap-around time (e.g. 22:00 to 06:00)
+        if start_h > end_h:
+            condition = f"(now.hour >= {start_h} || now.hour < {end_h})"
+        else:
+            condition = f"(now.hour >= {start_h} && now.hour < {end_h})"
+            
+        sleep_logic = f"""
+      # Night Mode Check ({start_h:02d}:00 - {end_h:02d}:00)
       - if:
           condition:
             lambda: |-
@@ -455,8 +459,9 @@ def _generate_scripts(device: DeviceConfig) -> str:
               if (!now.is_valid()) {{
                 return false;
               }}
-              // Deep sleep only between 00:01 and 05:00
-              return (now.hour >= 0 && now.hour < 5 && !(now.hour == 0 && now.minute == 0));
+              // Deep sleep only between {start_h:02d}:00 and {end_h:02d}:00
+              // But skip if it's exactly the top of the hour (we just woke up to refresh)
+              return {condition} && !(now.minute == 0);
           then:
             - lambda: |-
                 auto now = id(ha_time).now();
@@ -477,7 +482,27 @@ def _generate_scripts(device: DeviceConfig) -> str:
                 sleep_duration: 60min
           
           # Active Mode
-          else:
+          else:"""
+    else:
+        # No sleep logic, just fall through to active mode
+        sleep_logic = """
+      # Sleep mode disabled
+      - if:
+          condition:
+            lambda: 'return false;'
+          then:
+            - delay: 1s
+          else:"""
+
+    return f"""script:
+  - id: manage_run_and_sleep
+    mode: restart
+    then:
+      - wait_until:
+          condition:
+            lambda: 'return id(ha_time).now().is_valid();'
+          timeout: 120s
+      {sleep_logic}
             - lambda: |-
                 int page = id(display_page);
                 int interval = id(page_refresh_default_s);
@@ -828,15 +853,15 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         
         if format_type == "time_only":
             # Time only - centered
-            content.append(f'{indent}it.strftime({cx}, {y}, {time_font}, TextAlign::TOP_CENTER, {fg}, "%H:%M", id(ha_time).now());')
+            content.append(f'{indent}it.strftime({cx}, {y}, {time_font}, {fg}, TextAlign::TOP_CENTER, "%H:%M", id(ha_time).now());')
         elif format_type == "date_only":
             # Date only - centered
-            content.append(f'{indent}it.strftime({cx}, {y}, {date_font}, TextAlign::TOP_CENTER, {fg}, "%a, %b %d", id(ha_time).now());')
+            content.append(f'{indent}it.strftime({cx}, {y}, {date_font}, {fg}, TextAlign::TOP_CENTER, "%a, %b %d", id(ha_time).now());')
         else:
             # time_date - time on top, date below
-            content.append(f'{indent}it.strftime({cx}, {y}, {time_font}, TextAlign::TOP_CENTER, {fg}, "%H:%M", id(ha_time).now());')
+            content.append(f'{indent}it.strftime({cx}, {y}, {time_font}, {fg}, TextAlign::TOP_CENTER, "%H:%M", id(ha_time).now());')
             date_y = y + time_font_size + 4
-            content.append(f'{indent}it.strftime({cx}, {date_y}, {date_font}, TextAlign::TOP_CENTER, {fg}, "%a, %b %d", id(ha_time).now());')
+            content.append(f'{indent}it.strftime({cx}, {date_y}, {date_font}, {fg}, TextAlign::TOP_CENTER, "%a, %b %d", id(ha_time).now());')
         _wrap_with_condition(dst, indent, widget, content)
         return
 

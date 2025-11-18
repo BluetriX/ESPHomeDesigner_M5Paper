@@ -757,6 +757,7 @@
         </div>
         <div class="badge">MVP</div>
       </div>
+      <button id="deviceSettingsBtn" class="btn btn-secondary btn-full" style="margin-top:4px;">Device Settings</button>
       <div class="status-bar">
         <span>Base ESPHome config is managed in ESPHome UI.</span>
       </div>
@@ -926,6 +927,45 @@
       </div>
       <div class="modal-actions">
         <button id="importSnippetConfirm" class="btn">Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Device settings modal -->
+  <div id="deviceSettingsModal" class="modal-backdrop hidden">
+    <div class="modal" style="max-width: 500px; height: auto;">
+      <div class="modal-header">
+        <div>Device Settings</div>
+        <button id="deviceSettingsClose" class="btn btn-secondary">Close</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <div class="prop-label">Energy Saving Mode (Night Mode)</div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);margin-bottom:8px;">
+            <input id="deviceSleepEnabled" type="checkbox" style="width:auto;height:auto;margin:0;" />
+            <span>Enable Deep Sleep at night</span>
+          </label>
+          <div style="font-size: 9px; color: var(--muted); margin-bottom: 12px;">
+            When enabled, the device will enter deep sleep during the specified hours to save battery.
+            It will wake up briefly at the top of each hour to refresh the display.
+          </div>
+        </div>
+        <div class="field" style="display:flex;gap:12px;">
+          <div style="flex:1;">
+            <div class="prop-label">Start Hour (0-23)</div>
+            <input id="deviceSleepStart" class="prop-input" type="number" min="0" max="23" placeholder="0" />
+          </div>
+          <div style="flex:1;">
+            <div class="prop-label">End Hour (0-23)</div>
+            <input id="deviceSleepEnd" class="prop-input" type="number" min="0" max="23" placeholder="5" />
+          </div>
+        </div>
+        <div style="font-size: 9px; color: var(--muted); margin-top: 4px;">
+          Example: Start 0, End 5 means sleep from 00:00 until 05:00.
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="deviceSettingsSave" class="btn">Save</button>
       </div>
     </div>
   </div>
@@ -1426,6 +1466,11 @@
         ];
       }
       settings = layout.settings || settings || {};
+      // Ensure defaults for new settings
+      if (settings.sleep_enabled === undefined) settings.sleep_enabled = false;
+      if (settings.sleep_start_hour === undefined) settings.sleep_start_hour = 0;
+      if (settings.sleep_end_hour === undefined) settings.sleep_end_hour = 5;
+      
       currentPageIndex = 0;
       rebuildWidgetsIndex();
       applyOrientation(settings.orientation || "landscape");
@@ -1607,7 +1652,10 @@
     let pages = [];
     let settings = {
       orientation: "landscape",
-      dark_mode: false
+      dark_mode: false,
+      sleep_enabled: false,
+      sleep_start_hour: 0,
+      sleep_end_hour: 5
     };
     let currentPageIndex = 0;
     let widgetsById = new Map();
@@ -3678,6 +3726,11 @@
         device_id: "reterminal_e1001",
         name: "reTerminal E1001",
         current_page: currentPageIndex,
+        orientation: settings.orientation,
+        dark_mode: settings.dark_mode,
+        sleep_enabled: settings.sleep_enabled,
+        sleep_start_hour: settings.sleep_start_hour,
+        sleep_end_hour: settings.sleep_end_hour,
         pages
       };
     }
@@ -4390,6 +4443,60 @@
     if (pageSettingsSave) {
       pageSettingsSave.addEventListener("click", savePageSettings);
     }
+
+    // ============================================================================
+    // Device Settings Modal Functions
+    // ============================================================================
+    function openDeviceSettingsModal() {
+      const modal = document.getElementById("deviceSettingsModal");
+      const enabledInput = document.getElementById("deviceSleepEnabled");
+      const startInput = document.getElementById("deviceSleepStart");
+      const endInput = document.getElementById("deviceSleepEnd");
+      
+      if (enabledInput) enabledInput.checked = !!settings.sleep_enabled;
+      if (startInput) startInput.value = settings.sleep_start_hour !== undefined ? settings.sleep_start_hour : 0;
+      if (endInput) endInput.value = settings.sleep_end_hour !== undefined ? settings.sleep_end_hour : 5;
+      
+      if (modal) modal.classList.remove("hidden");
+    }
+
+    function closeDeviceSettingsModal() {
+      const modal = document.getElementById("deviceSettingsModal");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    function saveDeviceSettings() {
+      const enabledInput = document.getElementById("deviceSleepEnabled");
+      const startInput = document.getElementById("deviceSleepStart");
+      const endInput = document.getElementById("deviceSleepEnd");
+      
+      if (enabledInput) settings.sleep_enabled = !!enabledInput.checked;
+      
+      if (startInput) {
+        let val = parseInt(startInput.value, 10);
+        if (isNaN(val) || val < 0) val = 0;
+        if (val > 23) val = 23;
+        settings.sleep_start_hour = val;
+      }
+      
+      if (endInput) {
+        let val = parseInt(endInput.value, 10);
+        if (isNaN(val) || val < 0) val = 0;
+        if (val > 23) val = 23;
+        settings.sleep_end_hour = val;
+      }
+      
+      scheduleSnippetUpdate();
+      closeDeviceSettingsModal();
+    }
+
+    const deviceSettingsBtn = document.getElementById("deviceSettingsBtn");
+    const deviceSettingsClose = document.getElementById("deviceSettingsClose");
+    const deviceSettingsSave = document.getElementById("deviceSettingsSave");
+    
+    if (deviceSettingsBtn) deviceSettingsBtn.addEventListener("click", openDeviceSettingsModal);
+    if (deviceSettingsClose) deviceSettingsClose.addEventListener("click", closeDeviceSettingsModal);
+    if (deviceSettingsSave) deviceSettingsSave.addEventListener("click", saveDeviceSettings);
 
     async function loadLayoutFromBackend() {
       console.log("Loading layout from backend...");

@@ -209,6 +209,11 @@ class DeviceConfig:
     # Layout-wide settings
     orientation: str = "landscape"
     dark_mode: bool = False
+    
+    # Energy Saving / Night Mode
+    sleep_enabled: bool = False
+    sleep_start_hour: int = 0
+    sleep_end_hour: int = 5
 
     def ensure_pages(self, min_pages: int = DEFAULT_PAGES) -> None:
         """Ensure at least min_pages exist; add simple default pages if missing."""
@@ -260,6 +265,9 @@ class DeviceConfig:
             "current_page": self.current_page,
             "orientation": self.orientation,
             "dark_mode": self.dark_mode,
+            "sleep_enabled": self.sleep_enabled,
+            "sleep_start_hour": self.sleep_start_hour,
+            "sleep_end_hour": self.sleep_end_hour,
             "pages": [p.to_dict() for p in self.pages],
         }
 
@@ -276,6 +284,10 @@ class DeviceConfig:
 
         dark_mode_raw = data.get("dark_mode", False)
         dark_mode = bool(dark_mode_raw)
+        
+        sleep_enabled = bool(data.get("sleep_enabled", False))
+        sleep_start_hour = int(data.get("sleep_start_hour", 0))
+        sleep_end_hour = int(data.get("sleep_end_hour", 5))
 
         try:
             current_page = int(data.get("current_page", 0))
@@ -290,6 +302,9 @@ class DeviceConfig:
             current_page=current_page,
             orientation=orientation,
             dark_mode=dark_mode,
+            sleep_enabled=sleep_enabled,
+            sleep_start_hour=sleep_start_hour,
+            sleep_end_hour=sleep_end_hour,
         )
         cfg.ensure_pages()
         return cfg
