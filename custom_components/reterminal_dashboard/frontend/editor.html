@@ -1254,7 +1254,8 @@
                 value_format: p.format || "label_value",
                 color: p.color || "black",
                 font_style: p.font_style || "regular",
-                unit: p.unit || ""
+                unit: p.unit || "",
+                precision: parseInt(p.precision || -1, 10)
               };
             } else if (p.type === "datetime") {
               widget.props = {
@@ -2138,6 +2139,7 @@
             img.style.maxWidth = "100%";
             img.style.maxHeight = "100%";
             img.style.objectFit = "contain";
+            img.draggable = false;
             
             if (invert) {
               img.style.filter = "invert(1)";
@@ -3373,6 +3375,12 @@
           
           addLabeledInput("Value font size", "number", widget.props.value_font_size || 20, (v) => {
             widget.props.value_font_size = parseInt(v || "20", 10) || 20;
+            renderCanvas();
+            scheduleSnippetUpdate();
+          });
+
+          addLabeledInput("Decimals (-1 for string)", "number", widget.props.precision != null ? widget.props.precision : -1, (v) => {
+            widget.props.precision = parseInt(v || "-1", 10);
             renderCanvas();
             scheduleSnippetUpdate();
           });

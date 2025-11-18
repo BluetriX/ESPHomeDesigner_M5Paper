@@ -183,6 +183,14 @@ def _generate_fonts(device: DeviceConfig) -> str:
                         text_sizes.add(label_size)
                     if value_size > 0:
                         text_sizes.add(value_size)
+            elif wtype == "datetime":
+                props = widget.props or {}
+                time_size = int(props.get("time_font_size", 0) or 0)
+                date_size = int(props.get("date_font_size", 0) or 0)
+                if time_size > 0:
+                    text_sizes.add(time_size)
+                if date_size > 0:
+                    text_sizes.add(date_size)
             elif wtype == "image":
                 props = widget.props or {}
                 path = props.get("path", "").strip()
@@ -641,6 +649,22 @@ def _resolve_font(props: dict) -> str:
 
 def _resolve_font_by_size(size: int) -> str:
     """Pick a font id based on explicit font size value."""
+    if size <= 0:
+        return "id(font_normal)"
+    
+    # Use exact size font if it's custom
+    if size not in (19, 22, 24):
+        return f"id(font_text_{size})"
+    
+    # Map to standard fonts
+    if size == 19:
+        return "id(font_small)"
+    if size == 22:
+        return "id(font_normal)"
+    if size == 24:
+        return "id(font_header)"
+        
+    # Fallback (should not be reached if logic matches above)
     if size < 20:
         return "id(font_small)"
     if size < 26:
@@ -800,14 +824,23 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         label_font_size = int(props.get("label_font_size", 14) or 14)
         value_font_size = int(props.get("value_font_size", 20) or 20)
         font_family = props.get("font_family") or "Inter"
+        precision = int(props.get("precision", -1))
         
         if entity_id:
             # Generate safe ID from entity_id
             safe_id = entity_id.replace(".", "_").replace("-", "_")
             
             # Add marker comment for parser with font sizes and font_family
-            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} ent:{entity_id} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family}')
+            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} ent:{entity_id} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family} precision:{precision}')
             
+            # Determine value expression and format string
+            if precision >= 0:
+                val_expr = f"atof(id({safe_id}).state.c_str())"
+                fmt_spec = f"%.{precision}f"
+            else:
+                val_expr = f"id({safe_id}).state.c_str()"
+                fmt_spec = "%s"
+
             if value_format == "label_newline_value" and label:
                 # Label on one line, value on another - use separate fonts
                 label_font = _resolve_font_by_size(label_font_size)
@@ -816,21 +849,21 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
                 content.append(f'{indent}it.printf({x}, {y}, {label_font}, {fg}, "{label}");')
                 # Print value below label (approximate line height)
                 value_y = y + label_font_size + 4
-                content.append(f'{indent}it.printf({x}, {value_y}, {value_font}, {fg}, "%s", id({safe_id}).state.c_str());')
+                content.append(f'{indent}it.printf({x}, {value_y}, {value_font}, {fg}, "{fmt_spec}", {val_expr});')
             elif value_format == "label_value" and label:
                 # Inline format: "Label: Value" - use average size or value size
                 font = _resolve_font_by_size(value_font_size)
-                content.append(f'{indent}it.printf({x}, {y}, {font}, {fg}, "{label}: %s", id({safe_id}).state.c_str());')
+                content.append(f'{indent}it.printf({x}, {y}, {font}, {fg}, "{label}: {fmt_spec}", {val_expr});')
             else:
                 # value_only or no label - just show value
                 font = _resolve_font_by_size(value_font_size)
-                content.append(f'{indent}it.printf({x}, {y}, {font}, {fg}, "%s", id({safe_id}).state.c_str());')
+                content.append(f'{indent}it.printf({x}, {y}, {font}, {fg}, "{fmt_spec}", {val_expr});')
         else:
             # No entity_id configured - show placeholder
             placeholder = label or "sensor"
             font = _resolve_font_by_size(value_font_size)
             # Add marker comment for parser with font sizes and font_family
-            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family}')
+            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family} precision:{precision}')
             content.append(f'{indent}// No entity_id configured for this sensor_text widget')
             content.append(f'{indent}it.printf({x}, {y}, {font}, {fg}, "{placeholder}: N/A");')
         _wrap_with_condition(dst, indent, widget, content)
