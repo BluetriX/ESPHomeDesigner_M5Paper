@@ -75,8 +75,26 @@ class ParsedWidget:
     label_font_size: int | None = None
     value_font_size: int | None = None
     value_format: str | None = None  # For sensor_text widgets: value_only, label_value, label_newline_value
-    # Font family for text widgets
+    # Text widget properties
     font_family: str | None = None
+    font_size: int | None = None
+    font_style: str | None = None
+    # Common properties
+    color: str | None = None
+    # Shape properties
+    fill: bool | None = None
+    opacity: int | None = None
+    border_width: int | None = None
+    stroke_width: int | None = None
+    # Icon/Battery properties
+    size: int | None = None
+    # Progress bar properties
+    bar_height: int | None = None
+    show_label: bool | None = None
+    show_percentage: bool | None = None
+    # Datetime properties
+    time_font_size: int | None = None
+    date_font_size: int | None = None
 
 
 def yaml_to_layout(snippet: str) -> DeviceConfig:
@@ -140,52 +158,79 @@ def yaml_to_layout(snippet: str) -> DeviceConfig:
         for pw in widgets:
             # Build props based on widget type
             props = {}
+            
+            # Common properties from markers
             if pw.text:
                 props["text"] = pw.text
-            if pw.code:
-                props["code"] = pw.code
-                props["font_ref"] = "font_mdi_medium"  # Default
-                props["fit_icon_to_frame"] = True
-                props["size"] = 40
-                props["color"] = "black"
             if pw.font_family:
                 props["font_family"] = pw.font_family
-            if pw.type == "sensor_text":
+            if pw.font_size is not None:
+                props["font_size"] = pw.font_size
+            if pw.font_style:
+                props["font_style"] = pw.font_style
+            if pw.color:
+                props["color"] = pw.color
+            if pw.opacity is not None:
+                props["opacity"] = pw.opacity
+                
+            # Type-specific properties
+            if pw.type in ("text", "label"):
+                if pw.font_size is None:
+                    props["font_size"] = 16
+                if not pw.color:
+                    props["color"] = "black"
+                    
+            elif pw.code:
+                props["code"] = pw.code
+                props["font_ref"] = "font_mdi_medium"
+                props["fit_icon_to_frame"] = True
+                props["size"] = pw.size or 40
+                if not pw.color:
+                    props["color"] = "black"
+                    
+            elif pw.type == "sensor_text":
                 props["label_font_size"] = pw.label_font_size or 14
                 props["value_font_size"] = pw.value_font_size or 20
                 props["value_format"] = pw.value_format or "label_value"
-                props["color"] = "black"
+                if not pw.color:
+                    props["color"] = "black"
+                    
             elif pw.type == "datetime":
-                # datetime widget properties
                 props["format"] = pw.format or "time_date"
-                props["time_font_size"] = 28
-                props["date_font_size"] = 16
-                props["color"] = "black"
+                props["time_font_size"] = pw.time_font_size or 28
+                props["date_font_size"] = pw.date_font_size or 16
+                if not pw.color:
+                    props["color"] = "black"
+                    
             elif pw.type == "progress_bar":
-                # progress_bar properties
-                props["bar_height"] = 20
-                props["show_percentage"] = True
-                props["color"] = "black"
+                props["bar_height"] = pw.bar_height or 20
+                props["show_percentage"] = pw.show_percentage if pw.show_percentage is not None else True
+                props["show_label"] = pw.show_label if pw.show_label is not None else True
+                if not pw.color:
+                    props["color"] = "black"
+                    
             elif pw.type == "battery_icon":
-                # battery_icon properties
-                props["size"] = 40
-                props["color"] = "black"
+                props["size"] = pw.size or 40
+                if not pw.color:
+                    props["color"] = "black"
+                    
             elif pw.type in ("shape_rect", "shape_circle"):
-                # shape properties
-                props["fill"] = False
-                props["color"] = "black"
-                props["border_width"] = 1
-                props["opacity"] = 100
+                props["fill"] = pw.fill if pw.fill is not None else False
+                props["border_width"] = pw.border_width if pw.border_width is not None else 1
+                props["opacity"] = pw.opacity if pw.opacity is not None else 100
+                if not pw.color:
+                    props["color"] = "black"
+                    
             elif pw.type == "line":
-                # line properties
-                props["color"] = "black"
-                props["stroke_width"] = 1
+                props["stroke_width"] = pw.stroke_width or 1
+                if not pw.color:
+                    props["color"] = "black"
+                    
             elif pw.type == "image":
-                # image properties
                 props["path"] = pw.path or ""
                 props["invert"] = pw.invert
+                
             elif pw.type == "online_image":
-                # online_image (puppet) properties
                 props["url"] = pw.url or ""
                 props["interval_s"] = 300
             
@@ -370,25 +415,41 @@ def _parse_widget_line(line: str) -> ParsedWidget | None:
         path = meta.get("path")
         format_val = meta.get("format")
         invert_val = meta.get("invert", "false").lower() in ("true", "1", "yes")
+        
+        # Extract all properties from markers
         font_family = meta.get("font_family")
+        font_style = meta.get("font_style")
+        color = meta.get("color")
         
-        # Extract sensor_text specific properties
-        label_font = meta.get("label_font")
-        value_font = meta.get("value_font")
+        # Parse integer properties with fallback
+        def parse_int(val: str | None) -> int | None:
+            if val:
+                try:
+                    return int(val)
+                except ValueError:
+                    pass
+            return None
         
-        # Attempt to parse font sizes as integers
-        label_font_size = None
-        value_font_size = None
-        if label_font:
-            try:
-                label_font_size = int(label_font)
-            except ValueError:
-                pass
-        if value_font:
-            try:
-                value_font_size = int(value_font)
-            except ValueError:
-                pass
+        # Parse boolean properties
+        def parse_bool(val: str | None) -> bool | None:
+            if val is None:
+                return None
+            return val.lower() in ("true", "1", "yes")
+        
+        font_size = parse_int(meta.get("font_size"))
+        label_font_size = parse_int(meta.get("label_font"))
+        value_font_size = parse_int(meta.get("value_font"))
+        size = parse_int(meta.get("size"))
+        opacity = parse_int(meta.get("opacity"))
+        border_width = parse_int(meta.get("border_width")) or parse_int(meta.get("border"))
+        stroke_width = parse_int(meta.get("stroke_width")) or parse_int(meta.get("stroke"))
+        bar_height = parse_int(meta.get("bar_height"))
+        time_font_size = parse_int(meta.get("time_font"))
+        date_font_size = parse_int(meta.get("date_font"))
+        
+        fill = parse_bool(meta.get("fill"))
+        show_label = parse_bool(meta.get("show_label"))
+        show_percentage = parse_bool(meta.get("show_percentage")) or parse_bool(meta.get("show_pct"))
 
         return ParsedWidget(
             id=wid,
@@ -405,10 +466,23 @@ def _parse_widget_line(line: str) -> ParsedWidget | None:
             path=path or None,
             format=format_val or None,
             invert=invert_val,
+            font_family=font_family,
+            font_size=font_size,
+            font_style=font_style,
             label_font_size=label_font_size,
             value_font_size=value_font_size,
-            value_format=format_val or None,  # Use format_val for sensor_text value_format
-            font_family=font_family,
+            value_format=format_val or None,
+            color=color,
+            fill=fill,
+            opacity=opacity,
+            border_width=border_width,
+            stroke_width=stroke_width,
+            size=size,
+            bar_height=bar_height,
+            show_label=show_label,
+            show_percentage=show_percentage,
+            time_font_size=time_font_size,
+            date_font_size=date_font_size,
         )
 
     # Pattern 2: simple printf (VERY conservative)

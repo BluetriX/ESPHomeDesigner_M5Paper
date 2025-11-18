@@ -806,7 +806,9 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         safe_id = entity_id.replace(".", "_").replace("-", "_")
         
         # Add marker comment for parser
-        content.append(f'{indent}// widget:progress_bar id:{widget.id} type:progress_bar x:{x} y:{y} w:{w} h:{h} entity:{entity_id} label:"{label}" bar_height:{bar_height} border:{border_width}')
+        show_label_str = "true" if show_label else "false"
+        show_pct_str = "true" if show_percentage else "false"
+        content.append(f'{indent}// widget:progress_bar id:{widget.id} type:progress_bar x:{x} y:{y} w:{w} h:{h} entity:{entity_id} label:"{label}" bar_height:{bar_height} border:{border_width} show_label:{show_label_str} show_pct:{show_pct_str} color:{base_color}')
         
         # Calculate vertical layout
         label_y = y
@@ -896,7 +898,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         
         # Add marker comment for parser
         fill_str = "true" if fill else "false"
-        content.append(f'{indent}// widget:shape_rect id:{widget.id} type:shape_rect x:{x} y:{y} w:{w} h:{h} fill:{fill_str} border:{border_width} color:{base_color}')
+        content.append(f'{indent}// widget:shape_rect id:{widget.id} type:shape_rect x:{x} y:{y} w:{w} h:{h} fill:{fill_str} border:{border_width} opacity:{opacity} color:{base_color}')
         
         # Check if we should use grey dithering pattern (50% checkerboard)
         use_grey_pattern = (base_color == "gray" and fill)
@@ -938,10 +940,11 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         cy = y + h // 2
         fill = bool(props.get("fill"))
         border_width = int(props.get("border_width", 1) or 1)
+        opacity = int(props.get("opacity", 100) or 100)
         
         # Add marker comment for parser
         fill_str = "true" if fill else "false"
-        content.append(f'{indent}// widget:shape_circle id:{widget.id} type:shape_circle x:{x} y:{y} w:{w} h:{h} fill:{fill_str} border:{border_width} color:{base_color}')
+        content.append(f'{indent}// widget:shape_circle id:{widget.id} type:shape_circle x:{x} y:{y} w:{w} h:{h} fill:{fill_str} border:{border_width} opacity:{opacity} color:{base_color}')
         
         # Check if we should use grey dithering pattern
         use_grey_pattern = (base_color == "gray" and fill)
