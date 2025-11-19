@@ -163,26 +163,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.http.register_view(ReTerminalDashboardPanelView(hass))
     _LOGGER.info("%s: Panel view registered at /reterminal-dashboard", DOMAIN)
 
-    # Register the font file view for the editor
-    from .panel import ReTerminalDashboardFontView
-    hass.http.register_view(ReTerminalDashboardFontView(hass))
-    _LOGGER.info("%s: Font view registered at /reterminal-dashboard/materialdesignicons-webfont.ttf", DOMAIN)
-
-    # Note: Panel can be manually added to sidebar via configuration.yaml:
-    # panel_iframe:
-    #   reterminal:
-    #     title: "reTerminal Designer"
-    #     icon: mdi:monitor-dashboard
-    #     url: /reterminal-dashboard
-    #     require_admin: false
-    # See SIDEBAR_PANEL_SETUP.md for details
-
-    # Register services (idempotent)
-    async_register_services(hass, storage)
-
-    _LOGGER.info("%s: Config entry %s setup completed", DOMAIN, entry.entry_id)
-    return True
-
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
