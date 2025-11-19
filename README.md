@@ -1,12 +1,9 @@
 # reTerminal Dashboard Designer
 
-<img src="images/brand.png" alt="reTerminal Dashboard Logo" width="128" align="left" style="margin-right: 20px;">
 
 **A visual drag-and-drop editor for ESPHome e-paper dashboards, running right inside Home Assistant.**
 
-[**Open Dashboard Editor**](/reterminal-dashboard) (requires integration installation)
 
-<br clear="left"/>
 
 ![Dashboard Editor Screenshot](https://raw.githubusercontent.com/koosoli/ReTerminalDesigner/main/screenshots/Screenshot3.png)
 

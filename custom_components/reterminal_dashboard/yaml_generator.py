@@ -172,26 +172,32 @@ def _generate_fonts(device: DeviceConfig) -> str:
                 family = props.get("font_family")
                 if family and selected_font_family == "Inter":
                     selected_font_family = family
+                
+                # Get weight (default 400)
+                weight = int(props.get("font_weight", 400) or 400)
+                
                 # Collect text font size if specified
                 if wtype in ("text", "label"):
                     size = int(props.get("font_size", 0) or 0)
                     if size > 0:
-                        text_sizes.add(size)
+                        text_sizes.add((size, weight))
                 else:  # sensor_text
                     label_size = int(props.get("label_font_size", 0) or 0)
                     value_size = int(props.get("value_font_size", 0) or 0)
                     if label_size > 0:
-                        text_sizes.add(label_size)
+                        text_sizes.add((label_size, weight))
                     if value_size > 0:
-                        text_sizes.add(value_size)
+                        text_sizes.add((value_size, weight))
             elif wtype == "datetime":
                 props = widget.props or {}
+                # Datetime usually uses standard weights, but we can support custom if needed
+                # For now, assume standard weights for datetime to avoid complexity unless requested
                 time_size = int(props.get("time_font_size", 0) or 0)
                 date_size = int(props.get("date_font_size", 0) or 0)
                 if time_size > 0:
-                    text_sizes.add(time_size)
+                    text_sizes.add((time_size, 700)) # Time usually bold
                 if date_size > 0:
-                    text_sizes.add(date_size)
+                    text_sizes.add((date_size, 400)) # Date usually regular
             elif wtype == "image":
                 props = widget.props or {}
                 path = props.get("path", "").strip()
@@ -239,24 +245,19 @@ def _generate_fonts(device: DeviceConfig) -> str:
         "    size: 24"
     ]
     
-    # Add custom text fonts for non-standard sizes
+    # Add custom text fonts for non-standard sizes or weights
     if text_sizes:
         font_lines.append("")
-        font_lines.append("  # Custom text fonts for specific sizes")
-        for size in sorted(text_sizes):
-            # Skip if it matches our standard sizes closely
-            if size in (19, 22, 24):
-                continue
-            # Choose weight based on size
-            if size < 18:
-                weight = "400"  # Regular
-            elif size < 25:
-                weight = "500"  # Medium
-            else:
-                weight = "700"  # Bold
+        font_lines.append("  # Custom text fonts for specific sizes and weights")
+        for size, weight in sorted(text_sizes):
+            # Check if this matches a standard font exactly
+            if size == 19 and weight == 400: continue
+            if size == 22 and weight == 500: continue
+            if size == 24 and weight == 700: continue
+            
             font_lines.extend([
                 f"  - file: \"gfonts://{selected_font_family}@{weight}\"",
-                f"    id: font_text_{size}",
+                f"    id: font_text_{size}_{weight}",
                 f"    size: {size}"
             ])
     
@@ -591,8 +592,15 @@ def _generate_graphs(device: DeviceConfig) -> str:
         
         lines.append(f"  - id: {safe_id}")
         lines.append(f"    duration: {props.get('duration', '1h')}")
-        lines.append(f"    width: {int(props.get('width', 100))}")
-        lines.append(f"    height: {int(props.get('height', 50))}")
+        # Calculate clamped dimensions to ensure graph stays within bounds
+        # This matches the logic in _append_widget_render
+        x = max(0, min(widget.x, IMAGE_WIDTH))
+        y = max(0, min(widget.y, IMAGE_HEIGHT))
+        w = max(1, min(widget.width, IMAGE_WIDTH - x))
+        h = max(1, min(widget.height, IMAGE_HEIGHT - y))
+
+        lines.append(f"    width: {w}")
+        lines.append(f"    height: {h}")
         
         # Optional border (default true in ESPHome, but we allow control)
         if "border" in props:
@@ -728,59 +736,48 @@ def _append_page_render(dst: List[str], page_index: int, page: PageConfig) -> No
     dst.append(f"{indent}}}")
 
 
-def _resolve_font(props: dict) -> str:
-    """Pick a font id based on optional font_size hint in widget props."""
+def _resolve_font(props: dict, default_weight: int = 400) -> str:
+    """Pick a font id based on optional font_size and font_weight in widget props."""
     try:
         size = int(props.get("font_size", 0))
     except (TypeError, ValueError):
         size = 0
+        
+    try:
+        weight = int(props.get("font_weight", default_weight))
+    except (TypeError, ValueError):
+        weight = default_weight
 
     if size <= 0:
         return "id(font_normal)"
     
-    # Use exact size font if it's custom
-    if size not in (19, 22, 24):
-        return f"id(font_text_{size})"
-    
-    # Map to standard fonts
-    if size == 19:
+    # Check for standard fonts first
+    if size == 19 and weight == 400:
         return "id(font_small)"
-    if size == 22:
+    if size == 22 and weight == 500:
         return "id(font_normal)"
-    if size == 24:
+    if size == 24 and weight == 700:
         return "id(font_header)"
-
-    # Fallback logic for unspecified sizes
-    if size < 20:
-        return "id(font_small)"
-    if size < 26:
-        return "id(font_normal)"
-    return "id(font_header)"
+        
+    # Otherwise use generated custom font
+    return f"id(font_text_{size}_{weight})"
 
 
-def _resolve_font_by_size(size: int) -> str:
-    """Pick a font id based on explicit font size value."""
+def _resolve_font_by_size(size: int, weight: int = 400) -> str:
+    """Pick a font id based on explicit font size and weight."""
     if size <= 0:
         return "id(font_normal)"
     
-    # Use exact size font if it's custom
-    if size not in (19, 22, 24):
-        return f"id(font_text_{size})"
-    
-    # Map to standard fonts
-    if size == 19:
+    # Check for standard fonts first
+    if size == 19 and weight == 400:
         return "id(font_small)"
-    if size == 22:
+    if size == 22 and weight == 500:
         return "id(font_normal)"
-    if size == 24:
-        return "id(font_header)"        
-    
-    # Fallback (should not be reached if logic matches above)
-    if size < 20:
-        return "id(font_small)"
-    if size < 26:
-        return "id(font_normal)"
-    return "id(font_header)"
+    if size == 24 and weight == 700:
+        return "id(font_header)"
+        
+    # Otherwise use generated custom font
+    return f"id(font_text_{size}_{weight})"
 
 
 def _wrap_with_condition(dst: List[str], indent: str, widget: WidgetConfig, content_lines: List[str]) -> None:
@@ -940,6 +937,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         label_font_size = int(props.get("label_font_size", 14) or 14)
         value_font_size = int(props.get("value_font_size", 20) or 20)
         font_family = props.get("font_family") or "Inter"
+        font_weight = int(props.get("font_weight", 400) or 400)
         precision = int(props.get("precision", -1))
         
         if entity_id:
@@ -950,7 +948,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
                 safe_id = entity_id
             
             # Add marker comment for parser with font sizes and font_family
-            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} ent:{entity_id} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family} precision:{precision}')
+            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} ent:{entity_id} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family} font_weight:{font_weight} precision:{precision}')
             
             # Determine value expression and format string
             if precision >= 0:
@@ -962,8 +960,8 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
 
             if value_format == "label_newline_value" and label:
                 # Label on one line, value on another - use separate fonts
-                label_font = _resolve_font_by_size(label_font_size)
-                value_font = _resolve_font_by_size(value_font_size)
+                label_font = _resolve_font_by_size(label_font_size, font_weight)
+                value_font = _resolve_font_by_size(value_font_size, font_weight)
                 # Print label
                 content.append(f'{indent}it.printf({x}, {y}, {label_font}, {fg}, "{label}");')
                 # Print value below label (approximate line height)
@@ -971,18 +969,18 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
                 content.append(f'{indent}it.printf({x}, {value_y}, {value_font}, {fg}, "{fmt_spec}", {val_expr});')
             elif value_format == "label_value" and label:
                 # Inline format: "Label: Value" - use average size or value size
-                font = _resolve_font_by_size(value_font_size)
+                font = _resolve_font_by_size(value_font_size, font_weight)
                 content.append(f'{indent}it.printf({x}, {y}, {font}, {fg}, "{label}: {fmt_spec}", {val_expr});')
             else:
                 # value_only or no label - just show value
-                font = _resolve_font_by_size(value_font_size)
+                font = _resolve_font_by_size(value_font_size, font_weight)
                 content.append(f'{indent}it.printf({x}, {y}, {font}, {fg}, "{fmt_spec}", {val_expr});')
         else:
             # No entity_id configured - show placeholder
             placeholder = label or "sensor"
-            font = _resolve_font_by_size(value_font_size)
+            font = _resolve_font_by_size(value_font_size, font_weight)
             # Add marker comment for parser with font sizes and font_family
-            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family} precision:{precision}')
+            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family} font_weight:{font_weight} precision:{precision}')
             content.append(f'{indent}// No entity_id configured for this sensor_text widget')
             content.append(f'{indent}it.printf({x}, {y}, {font}, {fg}, "{placeholder}: N/A");')
         _wrap_with_condition(dst, indent, widget, content)
@@ -994,8 +992,8 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         time_font_size = int(props.get("time_font_size", 28) or 28)
         date_font_size = int(props.get("date_font_size", 16) or 16)
         
-        time_font = _resolve_font_by_size(time_font_size)
-        date_font = _resolve_font_by_size(date_font_size)
+        time_font = _resolve_font_by_size(time_font_size, 700)
+        date_font = _resolve_font_by_size(date_font_size, 400)
         
         # Calculate center X for alignment
         cx = x + w // 2
@@ -1241,17 +1239,35 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
     # Graph widget
     if wtype == "graph":
         entity_id = (widget.entity_id or "").strip()
-        duration = props.get("duration", "24h")
+        duration = props.get("duration", "1h")
         border = bool(props.get("border", True))
-        grid = bool(props.get("grid", True))
+        grid = bool(props.get("grid", True)) # Not used in lambda but good to track
         color_prop = (props.get("color") or "black").lower()
         
+        # Additional graph props for persistence
+        x_grid = props.get("x_grid", "")
+        y_grid = props.get("y_grid", "")
+        line_type = props.get("line_type", "")
+        line_thickness = props.get("line_thickness", "")
+        
         if not entity_id:
-            content.append(f'{indent}// widget:graph id:{widget.id} type:graph x:{x} y:{y} w:{w} h:{h} duration:"{duration}" border:{border} grid:{grid} color:{color_prop} (no entity)')
+            content.append(f'{indent}// widget:graph id:{widget.id} type:graph x:{x} y:{y} w:{w} h:{h} duration:"{duration}" border:{border} color:{color_prop} (no entity)')
             content.append(f'{indent}it.rectangle({x}, {y}, {w}, {h}, {fg});')
             content.append(f'{indent}it.line({x}, {y}+{h}, {x}+{w}, {y}, {fg});')
-            _wrap_with_condition(dst, indent, widget, content)
-            return
+        else:
+            # Generate safe ID for the graph component defined in _generate_graphs
+            safe_graph_id = f"graph_{widget.id}".replace("-", "_")
+            
+            # Add marker comment for parser
+            # Must include all properties to persist them
+            content.append(f'{indent}// widget:graph id:{widget.id} type:graph x:{x} y:{y} w:{w} h:{h} entity:{entity_id} duration:"{duration}" border:{border} x_grid:"{x_grid}" y_grid:"{y_grid}" line_type:"{line_type}" line_thickness:"{line_thickness}" color:{color_prop}')
+            
+            # Draw the graph using the component ID
+            # The graph component handles the border drawing if configured
+            content.append(f'{indent}it.graph({x}, {y}, id({safe_graph_id}));')
+            
+        _wrap_with_condition(dst, indent, widget, content)
+        return
 
     # Image widget
     if wtype == "image":

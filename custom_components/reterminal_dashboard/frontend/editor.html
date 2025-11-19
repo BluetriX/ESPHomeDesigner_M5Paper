@@ -2504,9 +2504,11 @@
 
           // Create polyline for the graph
           const polyline = document.createElementNS(svgNS, "polyline");
+
+          // Use normalized coordinates (0-100) for the points to match viewBox
           const points = sampleData.map((val, idx) => {
-            const x = padding + (idx / (sampleData.length - 1)) * graphWidth;
-            const y = padding + (1 - val) * graphHeight;
+            const x = (idx / (sampleData.length - 1)) * 100;
+            const y = 100 - (val * 100); // Invert Y because SVG 0 is top
             return `${x},${y}`;
           }).join(" ");
 
@@ -2571,6 +2573,8 @@
             body.style.color = colorStyle;
             body.style.opacity = opacity;
             body.style.fontFamily = fontFamily + ", sans-serif";
+            const fontWeight = props.font_weight || 400;
+            body.style.fontWeight = String(fontWeight);
 
             if (valueFormat === "label_value" && label) {
               body.style.display = "flex";
@@ -4919,47 +4923,65 @@
               const duration = p.duration || "1h";
               const borderEnabled = p.border !== false;
               const color = p.color || "black";
-              const colorStyle = color === "white" ? "COLOR_ON" : "COLOR_OFF";
-              const graphId = `graph_${w.id}`.replace(/-/g, "_");
+              const xGrid = p.x_grid || "";
+              const yGrid = p.y_grid || "";
+              const lineType = p.line_type || "SOLID";
+              const lineThickness = parseInt(p.line_thickness || 3, 10);
+              const continuous = !!p.continuous;
+              const minValue = p.min_value || "";
+              const maxValue = p.max_value || "";
+              const minRange = p.min_range || "";
+              const maxRange = p.max_range || "";
+              const safeId = `graph_${w.id}`.replace(/-/g, "_");
 
-              lines.push(`        // widget:graph id:${w.id} type:graph x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} duration:${duration} border:${borderEnabled} color:${color}`);
+              // Generate marker comment for persistence
+              lines.push(`        // widget:graph id:${w.id} type:graph x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} duration:${duration} border:${borderEnabled} color:${color} x_grid:${xGrid} y_grid:${yGrid} line_type:${lineType} line_thickness:${lineThickness} continuous:${continuous} min_value:${minValue} max_value:${maxValue} min_range:${minRange} max_range:${maxRange}`);
+
               if (entityId) {
-                // Draw dummy graph for preview
-                ctx.beginPath();
-                ctx.strokeStyle = colorStyle;
-                ctx.lineWidth = widget.props.line_thickness || 1;
-
-                // Draw axes
-                ctx.moveTo(x, y + h);
-                ctx.lineTo(x + w, y + h);
-                ctx.moveTo(x, y);
-                ctx.lineTo(x, y + h);
-                ctx.stroke();
-
-                // Draw dummy data line
-                ctx.beginPath();
-                const points = 20;
-                for (let i = 0; i <= points; i++) {
-                  const px = x + (w * i) / points;
-                  // Generate a sine wave pattern
-                  const py = y + h / 2 + (Math.sin(i * 0.5) * h / 3);
-                  if (i === 0) ctx.moveTo(px, py);
-                  else ctx.lineTo(px, py);
+                // Add to graph: section:
+                lines.push(`        // graph:`);
+                lines.push(`        //   - id: ${safeId}`);
+                lines.push(`        //     x: ${w.x}`);
+                lines.push(`        //     y: ${w.y}`);
+                lines.push(`        //     width: ${w.width}`);
+                lines.push(`        //     height: ${w.height}`);
+                lines.push(`        //     entity: ${entityId}`);
+                lines.push(`        //     duration: ${duration}`);
+                lines.push(`        //     line_type: ${lineType}`);
+                lines.push(`        //     line_thickness: ${lineThickness}`);
+                lines.push(`        //     continuous: ${continuous}`);
+                if (borderEnabled) {
+                  lines.push(`        //     border: ${color === "white" ? "on_color" : "off_color"}`);
+                } else {
+                  lines.push(`        //     border: none`);
                 }
-                ctx.stroke();
+                if (xGrid) {
+                  lines.push(`        //     x_grid: ${xGrid}`);
+                }
+                if (yGrid) {
+                  lines.push(`        //     y_grid: ${yGrid}`);
+                }
+                if (minValue) {
+                  lines.push(`        //     min_value: ${minValue}`);
+                }
+                if (maxValue) {
+                  lines.push(`        //     max_value: ${maxValue}`);
+                }
+                if (minRange) {
+                  lines.push(`        //     min_range: ${minRange}`);
+                }
+                if (maxRange) {
+                  lines.push(`        //     max_range: ${maxRange}`);
+                }
+                lines.push(`        //     color: ${color === "white" ? "on_color" : "off_color"}`);
 
-                // Draw label
-                ctx.fillStyle = colorStyle;
-                ctx.font = "10px sans-serif";
-                ctx.fillText(`Graph: ${entityId}`, x + 2, y + 12);
+                // Generate actual graph call
+                lines.push(`        it.graph(${w.x}, ${w.y}, id(${safeId}));`);
               } else {
-                // Placeholder box
-                ctx.strokeStyle = colorStyle;
-                ctx.lineWidth = 1;
-                ctx.strokeRect(x, y, w, h);
-                ctx.fillStyle = colorStyle;
-                ctx.font = "12px sans-serif";
-                ctx.fillText("Graph (no entity)", x + 5, y + 20);
+                // Fallback for no entity
+                const colorStyle = color === "white" ? "COLOR_ON" : "COLOR_OFF";
+                lines.push(`        it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${colorStyle});`);
+                lines.push(`        it.printf(${w.x}+5, ${w.y}+5, id(font_small), ${colorStyle}, TextAlign::TOP_LEFT, "Graph (no entity)");`);
               }
             } else if (t === "line") {
               const colorProp = p.color || "black";
