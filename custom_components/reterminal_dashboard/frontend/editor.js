@@ -280,7 +280,8 @@ function parseSnippetYamlOffline(yamlText) {
                         font_weight: parseInt(p.font_weight || 400, 10),
                         unit: p.unit || "",
                         precision: parseInt(p.precision || -1, 10),
-                        text_align: p.align || "TOP_LEFT"
+                        text_align: p.align || "TOP_LEFT",
+                        is_text_sensor: (p.text_sensor === "true")
                     };
                 } else if (p.type === "datetime") {
                     widget.props = {

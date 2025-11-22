@@ -48,7 +48,7 @@
 #
 # IMPORTANT: Add this on_boot section to initialize the display!
 esphome:
-  name: reterminal-e1001
+  name: reterminal-e1001-dashboard
   friendly_name: reTerminal E1001
   on_boot:
     priority: 600
