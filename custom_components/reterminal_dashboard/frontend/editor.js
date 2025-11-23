@@ -280,8 +280,7 @@ function parseSnippetYamlOffline(yamlText) {
                         font_weight: parseInt(p.font_weight || 400, 10),
                         unit: p.unit || "",
                         precision: parseInt(p.precision || -1, 10),
-                        text_align: p.align || "TOP_LEFT",
-                        is_text_sensor: (p.text_sensor === "true")
+                        text_align: p.align || "TOP_LEFT"
                     };
                 } else if (p.type === "datetime") {
                     widget.props = {
@@ -540,7 +539,6 @@ function applyImportedLayout(layout) {
     renderPagesSidebar();
     renderCanvas();
     renderPropertiesPanel();
-    scheduleSnippetUpdate();
     console.log("=== applyImportedLayout completed ===");
 }
 
@@ -3614,23 +3612,6 @@ function renderPropertiesPanel() {
             entityWrap.appendChild(entityRow);
             panel.appendChild(entityWrap);
 
-            const textSensorWrap = document.createElement("div");
-            textSensorWrap.className = "field";
-            const textSensorLbl = document.createElement("div");
-            textSensorLbl.className = "prop-label";
-            textSensorLbl.textContent = "Is Text Sensor?";
-            const textSensorCb = document.createElement("input");
-            textSensorCb.type = "checkbox";
-            textSensorCb.checked = !!widget.props.is_text_sensor;
-            textSensorCb.addEventListener("change", () => {
-                widget.props.is_text_sensor = textSensorCb.checked;
-                renderCanvas();
-                scheduleSnippetUpdate();
-            });
-            textSensorWrap.appendChild(textSensorLbl);
-            textSensorWrap.appendChild(textSensorCb);
-            panel.appendChild(textSensorWrap);
-
             const localWrap = document.createElement("div");
             localWrap.className = "field";
             const localLbl = document.createElement("div");
@@ -4010,7 +3991,6 @@ function renderPropertiesPanel() {
     condHelpWrap.innerHTML = "Show/hide this widget based on an entity's state.";
     panel.appendChild(condHelpWrap);
 
-    // Condition Entity
     const condEntityWrap = document.createElement("div");
     condEntityWrap.className = "field";
     const condEntityLbl = document.createElement("div");
@@ -4056,107 +4036,20 @@ function renderPropertiesPanel() {
     condEntityWrap.appendChild(condEntityRow);
     panel.appendChild(condEntityWrap);
 
-    // Condition Mode Selector
-    const modeWrap = document.createElement("div");
-    modeWrap.className = "field";
-    const modeLbl = document.createElement("div");
-    modeLbl.className = "prop-label";
-    modeLbl.textContent = "Condition Mode";
-
-    const modeSelect = document.createElement("select");
-    modeSelect.className = "select";
-
-    // Determine current mode based on properties
-    // If min/max/logic are set, default to range. Otherwise single.
-    let currentMode = "single";
-    if (widget.condition_min != null || widget.condition_max != null || widget.condition_logic != null) {
-        currentMode = "range";
-    }
-
-    const modes = [
-        { value: "single", label: "Single Value (Operator)" },
-        { value: "range", label: "Numeric Range (Min/Max)" }
-    ];
-
-    modes.forEach(m => {
-        const opt = document.createElement("option");
-        opt.value = m.value;
-        opt.textContent = m.label;
-        if (m.value === currentMode) opt.selected = true;
-        modeSelect.appendChild(opt);
-    });
-
-    modeSelect.addEventListener("change", () => {
-        const newMode = modeSelect.value;
-        if (newMode === "single") {
-            // Clear range props
-            widget.condition_min = null;
-            widget.condition_max = null;
-            widget.condition_logic = null;
-            // Ensure operator exists
-            if (!widget.condition_operator) widget.condition_operator = "==";
-        } else {
-            // Clear single props
-            widget.condition_operator = null;
-            widget.condition_state = null;
-            // Ensure logic exists
-            if (!widget.condition_logic) widget.condition_logic = "and";
+    addSelect(
+        "Operator",
+        widget.condition_operator || "==",
+        ["==", "!=", ">", "<", ">=", "<="],
+        (val) => {
+            widget.condition_operator = val;
+            scheduleSnippetUpdate();
         }
-        renderPropertiesPanel(); // Re-render to show correct fields
+    );
+
+    addLabeledInput("Expected value", "text", widget.condition_state || "", (v) => {
+        widget.condition_state = v || null;
         scheduleSnippetUpdate();
     });
-
-    modeWrap.appendChild(modeLbl);
-    modeWrap.appendChild(modeSelect);
-    panel.appendChild(modeWrap);
-
-    if (currentMode === "single") {
-        addSelect(
-            "Operator",
-            widget.condition_operator || "==",
-            ["==", "!=", ">", "<", ">=", "<="],
-            (val) => {
-                widget.condition_operator = val;
-                scheduleSnippetUpdate();
-            }
-        );
-
-        addLabeledInput("Expected value", "text", widget.condition_state || "", (v) => {
-            widget.condition_state = v || null;
-            scheduleSnippetUpdate();
-        });
-    } else {
-        // Range Mode UI
-        addLabeledInput("Minimum Value (>)", "number", widget.condition_min != null ? widget.condition_min : "", (v) => {
-            widget.condition_min = v === "" ? null : parseFloat(v);
-            scheduleSnippetUpdate();
-        });
-
-        addLabeledInput("Maximum Value (<)", "number", widget.condition_max != null ? widget.condition_max : "", (v) => {
-            widget.condition_max = v === "" ? null : parseFloat(v);
-            scheduleSnippetUpdate();
-        });
-
-        addSelect(
-            "Logic",
-            widget.condition_logic || "and",
-            ["and", "or"],
-            (val) => {
-                widget.condition_logic = val;
-                scheduleSnippetUpdate();
-            }
-        );
-
-        const logicHint = document.createElement("div");
-        logicHint.style.fontSize = "9px";
-        logicHint.style.color = "var(--muted)";
-        logicHint.style.marginTop = "-8px";
-        logicHint.style.marginBottom = "8px";
-        logicHint.textContent = widget.condition_logic === "or"
-            ? "Visible if OUTSIDE range (Value < Min OR Value > Max)"
-            : "Visible if INSIDE range (Min < Value < Max)";
-        panel.appendChild(logicHint);
-    }
 
     const clearCondWrap = document.createElement("div");
     clearCondWrap.className = "field";
@@ -4169,9 +4062,6 @@ function renderPropertiesPanel() {
         widget.condition_entity = null;
         widget.condition_state = null;
         widget.condition_operator = null;
-        widget.condition_min = null;
-        widget.condition_max = null;
-        widget.condition_logic = null;
         renderPropertiesPanel();
         scheduleSnippetUpdate();
     });
@@ -4405,31 +4295,9 @@ function generateSnippetLocally() {
     lines.push("# Then keep the 'file: fonts/materialdesignicons-webfont.ttf' path below.");
     lines.push("");
 
-    // Generate font: section with standard Inter fonts
-    lines.push("font:");
-    lines.push("  # Standard fonts used by text widgets");
-    lines.push("  - file: \"gfonts://Inter@400\"");
-    lines.push("    id: font_axis");
-    lines.push("    size: 10");
-    lines.push("  - file: \"gfonts://Inter@400\"");
-    lines.push("    id: font_small");
-    lines.push("    size: 19");
-    lines.push("  - file: \"gfonts://Inter@500\"");
-    lines.push("    id: font_normal");
-    lines.push("    size: 22");
-    lines.push("  - file: \"gfonts://Inter@700\"");
-    lines.push("    id: font_header");
-    lines.push("    size: 24");
-    lines.push("  - file: \"gfonts://Inter@700\"");
-    lines.push("    id: font_large");
-    lines.push("    size: 28");
-    lines.push("  - file: \"gfonts://Inter@400\"");
-    lines.push("    id: font_medium");
-    lines.push("    size: 20");
-    lines.push("");
-
     if (iconCodes.size > 0) {
-        lines.push("  # Icon fonts used by MDI icon widgets");
+        lines.push("font:");
+        lines.push("  # Icon fonts used by MDI icon widgets generated from the reTerminal editor.");
         lines.push("  - file: 'fonts/materialdesignicons-webfont.ttf'");
         lines.push("    id: font_mdi_large");
         lines.push("    size: 200");
@@ -4444,70 +4312,6 @@ function generateSnippetLocally() {
         lines.push("    glyphs: *mdi_glyphs");
         lines.push("");
     }
-
-    // ... (graph generation remains same) ...
-
-    // Helper to wrap content with condition
-    const wrapWithCondition = (linesArr, w, contentLines) => {
-        // Check for Single Value mode
-        const hasSingle = (w.condition_entity && w.condition_state != null && w.condition_operator);
-        // Check for Range mode
-        const hasRange = (w.condition_entity && (w.condition_min != null || w.condition_max != null));
-
-        if (!hasSingle && !hasRange) {
-            contentLines.forEach(l => linesArr.push(l));
-            return;
-        }
-
-        const safeCondId = w.condition_entity.replace(/\./g, "_").replace(/-/g, "_");
-        // Simple heuristic for numeric vs text sensors in local preview
-        // Check for 'sensor' (covers sensor. and sensor_), 'number', 'input_number'
-        const isNumeric = w.condition_entity.startsWith("sensor") ||
-            w.condition_entity.startsWith("number") ||
-            w.condition_entity.startsWith("input_number");
-
-        linesArr.push(`        {`); // Start scope
-
-        let valExpr = `id(${safeCondId}).state`;
-        if (!isNumeric) {
-            linesArr.push(`          float cond_val = atof(id(${safeCondId}).state.c_str());`);
-            valExpr = `cond_val`;
-        }
-
-        if (hasRange) {
-            const logic = (w.condition_logic || "and").toLowerCase();
-            const parts = [];
-            if (w.condition_min != null) parts.push(`${valExpr} > ${w.condition_min}`);
-            if (w.condition_max != null) parts.push(`${valExpr} < ${w.condition_max}`);
-
-            if (parts.length > 0) {
-                const joinOp = logic === "and" ? " && " : " || ";
-                linesArr.push(`          if (${parts.join(joinOp)}) {`);
-            } else {
-                linesArr.push(`          if (true) {`);
-            }
-        } else {
-            // Single value logic
-            const op = w.condition_operator || "==";
-            const state = w.condition_state;
-            if (["<", ">", "<=", ">="].includes(op)) {
-                linesArr.push(`          if (${valExpr} ${op} ${state}) {`);
-            } else {
-                if (isNumeric) {
-                    linesArr.push(`          if (${valExpr} ${op} ${state}) {`);
-                } else {
-                    linesArr.push(`          if (id(${safeCondId}).state ${op} "${state}") {`);
-                }
-            }
-        }
-
-        contentLines.forEach(l => linesArr.push(`            ${l.trim()}`));
-        linesArr.push(`          }`);
-        linesArr.push(`        }`); // End scope
-    };
-
-    // ... (rest of generation loop, replacing direct pushes with wrapWithCondition) ...
-
 
     // Collect all graph widgets to generate graph: declarations
     const graphWidgets = [];
@@ -4702,7 +4506,7 @@ function generateSnippetLocally() {
     lines.push("    lambda: |-");
     lines.push("      int page = id(display_page);");
 
-    pagesLocal.forEach((page, pageIndex) => {
+    pages.forEach((page, pageIndex) => {
         lines.push(`      if (page == ${pageIndex}) {`);
         if (!page.widgets || !page.widgets.length) {
             lines.push("        // No widgets on this page.");
@@ -4710,7 +4514,6 @@ function generateSnippetLocally() {
             for (const w of page.widgets) {
                 const t = (w.type || "").toLowerCase();
                 const p = w.props || {};
-                const contentLines = [];
 
                 // Add local sensor marker comment for relevant widgets
                 let localMarker = "";
@@ -4730,11 +4533,20 @@ function generateSnippetLocally() {
                     const italic = p.italic ? "true" : "false";
                     const bpp = p.bpp || 1;
 
-                    contentLines.push(`// widget:text id:${w.id} type:text x:${w.x} y:${w.y} w:${w.width} h:${w.height} text:"${txt}" font:"${fontFamily}" size:${fontSize} weight:${fontWeight} italic:${italic} bpp:${bpp} color:${colorProp} align:${textAlign}`);
-                    contentLines.push(`it.printf(${w.x}, ${w.y}, id(font_normal), ${color}, TextAlign::${textAlign}, "${txt}");`);
-
-                    wrapWithCondition(lines, w, contentLines);
-
+                    lines.push(`        // widget:text id:${w.id} type:text x:${w.x} y:${w.y} w:${w.width} h:${w.height} text:"${txt}" font:"${fontFamily}" size:${fontSize} weight:${fontWeight} italic:${italic} bpp:${bpp} color:${colorProp} align:${textAlign}`);
+                    lines.push(`        // Note: Configure font with weight in font: section. Example:`);
+                    lines.push(`        // font:`);
+                    lines.push(`        //   - file:`);
+                    lines.push(`        //       type: gfonts`);
+                    lines.push(`        //       family: ${fontFamily}`);
+                    lines.push(`        //       weight: ${fontWeight}`);
+                    if (p.italic) {
+                        lines.push(`        //       italic: true`);
+                    }
+                    lines.push(`        //     id: font_${fontFamily.toLowerCase().replace(/\s+/g, '_')}_${fontWeight}`);
+                    lines.push(`        //     size: ${fontSize}`);
+                    lines.push(`        //     bpp: ${bpp}  # 1=no AA, 2=4 levels, 4=16 levels, 8=256 levels`);
+                    lines.push(`        it.printf(${w.x}, ${w.y}, id(font_normal), ${color}, TextAlign::${textAlign}, "${txt}");`);
                 } else if (t === "sensor_text") {
                     const entityId = (w.entity_id || "").trim();
                     const label = (w.title || "").replace(/"/g, '\\"');
@@ -4746,12 +4558,13 @@ function generateSnippetLocally() {
                     const textAlign = p.text_align || "TOP_LEFT";
                     const precision = parseInt(p.precision !== undefined ? p.precision : -1, 10);
                     const unit = p.unit || "";
-                    const isTextSensor = !!p.is_text_sensor;
 
-                    contentLines.push(`// widget:sensor_text id:${w.id} type:sensor_text x:${w.x} y:${w.y} w:${w.width} h:${w.height} ent:${entityId} title:"${label}" format:${valueFormat} label_font:${labelFontSize} value_font:${valueFontSize} color:${colorProp} align:${textAlign} precision:${precision} unit:"${unit}" local:${!!p.is_local_sensor} text_sensor:${isTextSensor}`);
+                    lines.push(`        // widget:sensor_text id:${w.id} type:sensor_text x:${w.x} y:${w.y} w:${w.width} h:${w.height} ent:${entityId} title:"${label}" format:${valueFormat} label_font:${labelFontSize} value_font:${valueFontSize} color:${colorProp} align:${textAlign} precision:${precision} unit:"${unit}" local:${!!p.is_local_sensor}`);
 
                     if (entityId) {
                         const safeId = entityId.replace(/\./g, "_").replace(/-/g, "_");
+                        // Determine if it's a numeric sensor or text sensor
+                        // Default to numeric for 'sensor.' unless is_text_sensor is explicitly true
                         const isNumeric = entityId.startsWith("sensor.") && !isTextSensor;
 
                         let valueExpr = `id(${safeId}).state`;
@@ -4759,22 +4572,23 @@ function generateSnippetLocally() {
                         if (precision >= 0) fmtSpec = `%${precision}.${precision}f`;
 
                         if (!isNumeric) {
+                            // For text sensors, .state is a std::string, so we need .c_str() for printf
                             valueExpr = `id(${safeId}).state.c_str()`;
                             fmtSpec = "%s";
                         }
 
                         if (valueFormat === "label_value") {
-                            contentLines.push(`it.printf(${w.x}, ${w.y}, id(font_small), ${color}, TextAlign::TOP_LEFT, "${label}");`);
-                            contentLines.push(`it.printf(${w.x}, ${w.y} + ${labelFontSize} + 2, id(font_large), ${color}, TextAlign::TOP_LEFT, "${fmtSpec}%s", ${valueExpr}, "${unit}");`);
+                            lines.push(`        it.printf(${w.x}, ${w.y}, id(font_small), ${color}, TextAlign::TOP_LEFT, "${label}");`);
+                            lines.push(`        it.printf(${w.x}, ${w.y} + ${labelFontSize} + 2, id(font_large), ${color}, TextAlign::TOP_LEFT, "${fmtSpec}%s", ${valueExpr}, "${unit}");`);
                         } else if (valueFormat === "value_only") {
-                            contentLines.push(`it.printf(${w.x}, ${w.y}, id(font_large), ${color}, TextAlign::${textAlign}, "${fmtSpec}%s", ${valueExpr}, "${unit}");`);
+                            lines.push(`        it.printf(${w.x}, ${w.y}, id(font_large), ${color}, TextAlign::${textAlign}, "${fmtSpec}%s", ${valueExpr}, "${unit}");`);
                         } else {
-                            contentLines.push(`it.printf(${w.x}, ${w.y}, id(font_medium), ${color}, TextAlign::${textAlign}, "${label}");`);
+                            // label_only
+                            lines.push(`        it.printf(${w.x}, ${w.y}, id(font_medium), ${color}, TextAlign::${textAlign}, "${label}");`);
                         }
                     } else {
-                        contentLines.push(`it.printf(${w.x}, ${w.y}, id(font_medium), ${color}, TextAlign::${textAlign}, "${label}: (No Entity)");`);
+                        lines.push(`        it.printf(${w.x}, ${w.y}, id(font_medium), ${color}, TextAlign::${textAlign}, "${label}: (No Entity)");`);
                     }
-                    wrapWithCondition(lines, w, contentLines);
 
                 } else if (t === "graph") {
                     const entityId = (w.entity_id || "").trim();
@@ -4795,19 +4609,25 @@ function generateSnippetLocally() {
 
                     const safeId = `graph_${w.id}`.replace(/-/g, "_");
 
-                    contentLines.push(`// widget:graph id:${w.id} type:graph x:${w.x} y:${w.y} w:${w.width} h:${w.height} title:"${title}" entity:${entityId} local:${!!p.is_local_sensor} duration:${duration} border:${borderEnabled} color:${colorProp} x_grid:${xGrid} y_grid:${yGrid} line_type:${lineType} line_thickness:${lineThickness} continuous:${continuous} min_value:${minValue} max_value:${maxValue} min_range:${minRange} max_range:${maxRange}`);
+                    lines.push(`        // widget:graph id:${w.id} type:graph x:${w.x} y:${w.y} w:${w.width} h:${w.height} title:"${title}" entity:${entityId} local:${!!p.is_local_sensor} duration:${duration} border:${borderEnabled} color:${colorProp} x_grid:${xGrid} y_grid:${yGrid} line_type:${lineType} line_thickness:${lineThickness} continuous:${continuous} min_value:${minValue} max_value:${maxValue} min_range:${minRange} max_range:${maxRange}`);
 
                     if (entityId) {
-                        contentLines.push(`it.graph(${w.x}, ${w.y}, id(${safeId}));`);
+                        // Add to graph: section (handled by backend usually, but we add comments for local)
+                        lines.push(`        // graph:`);
+                        lines.push(`        //   - id: ${safeId}`);
+                        lines.push(`        //     entity: ${entityId}`);
+                        lines.push(`        //     duration: ${duration}`);
+                        lines.push(`        //     width: ${w.width}`);
+                        lines.push(`        //     height: ${w.height}`);
+
+                        lines.push(`        it.graph(${w.x}, ${w.y}, id(${safeId}));`);
                         if (title) {
-                            contentLines.push(`it.printf(${w.x}+4, ${w.y}+2, id(font_small), ${color}, TextAlign::TOP_LEFT, "${title}");`);
+                            lines.push(`        it.printf(${w.x}+4, ${w.y}+2, id(font_small), ${color}, TextAlign::TOP_LEFT, "${title}");`);
                         }
                     } else {
-                        contentLines.push(`it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
-                        contentLines.push(`it.printf(${w.x}+5, ${w.y}+5, id(font_small), ${color}, TextAlign::TOP_LEFT, "Graph (no entity)");`);
+                        lines.push(`        it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
+                        lines.push(`        it.printf(${w.x}+5, ${w.y}+5, id(font_small), ${color}, TextAlign::TOP_LEFT, "Graph (no entity)");`);
                     }
-                    wrapWithCondition(lines, w, contentLines);
-
                 } else if (t === "progress_bar") {
                     const entityId = (w.entity_id || "").trim();
                     const title = (w.title || "").replace(/"/g, '\\"');
@@ -4818,41 +4638,43 @@ function generateSnippetLocally() {
                     const colorProp = p.color || "black";
                     const color = colorProp === "white" ? "COLOR_OFF" : "COLOR_ON";
 
-                    contentLines.push(`// widget:progress_bar id:${w.id} type:progress_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} title:"${title}" show_label:${showLabel} show_pct:${showPercentage} bar_height:${barHeight} border:${borderWidth} color:${colorProp} local:${!!p.is_local_sensor}`);
+                    lines.push(`        // widget:progress_bar id:${w.id} type:progress_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} title:"${title}" show_label:${showLabel} show_pct:${showPercentage} bar_height:${barHeight} border:${borderWidth} color:${colorProp} local:${!!p.is_local_sensor}`);
 
                     if (entityId) {
                         const safeId = entityId.replace(/\./g, "_").replace(/-/g, "_");
-                        contentLines.push(`// Progress Bar for ${entityId}`);
+                        lines.push(`        // Progress Bar for ${entityId}`);
+                        lines.push(`        // Note: Requires a sensor with percentage value (0-100)`);
+                        lines.push(`        float val_${w.id} = id(${safeId}).state;`);
+                        lines.push(`        if (std::isnan(val_${w.id})) val_${w.id} = 0;`);
+                        lines.push(`        int pct_${w.id} = (int)val_${w.id};`);
+                        lines.push(`        if (pct_${w.id} < 0) pct_${w.id} = 0;`);
+                        lines.push(`        if (pct_${w.id} > 100) pct_${w.id} = 100;`);
 
-                        // Use scope to prevent variable collision
-                        contentLines.push(`{`);
-                        contentLines.push(`  float val_${w.id} = id(${safeId}).state;`);
-                        contentLines.push(`  if (std::isnan(val_${w.id})) val_${w.id} = 0;`);
-                        contentLines.push(`  int pct_${w.id} = (int)val_${w.id};`);
-                        contentLines.push(`  if (pct_${w.id} < 0) pct_${w.id} = 0;`);
-                        contentLines.push(`  if (pct_${w.id} > 100) pct_${w.id} = 100;`);
-
+                        // Draw label
                         if (showLabel && title) {
-                            contentLines.push(`  it.printf(${w.x}, ${w.y}, id(font_small), ${color}, TextAlign::TOP_LEFT, "${title}");`);
+                            lines.push(`        it.printf(${w.x}, ${w.y}, id(font_small), ${color}, TextAlign::TOP_LEFT, "${title}");`);
                         }
+
+                        // Draw percentage
                         if (showPercentage) {
-                            contentLines.push(`  it.printf(${w.x} + ${w.width}, ${w.y}, id(font_small), ${color}, TextAlign::TOP_RIGHT, "%d%%", pct_${w.id});`);
+                            lines.push(`        it.printf(${w.x} + ${w.width}, ${w.y}, id(font_small), ${color}, TextAlign::TOP_RIGHT, "%d%%", pct_${w.id});`);
                         }
 
+                        // Draw bar
                         const barY = w.y + (w.height - barHeight);
-                        contentLines.push(`  it.rectangle(${w.x}, ${barY}, ${w.width}, ${barHeight}, ${color});`);
-                        contentLines.push(`  if (pct_${w.id} > 0) {`);
-                        contentLines.push(`    int bar_w = (${w.width} - 4) * pct_${w.id} / 100;`);
-                        contentLines.push(`    it.filled_rectangle(${w.x} + 2, ${barY} + 2, bar_w, ${barHeight} - 4, ${color});`);
-                        contentLines.push(`  }`);
-                        contentLines.push(`}`); // End scope
+                        lines.push(`        it.rectangle(${w.x}, ${barY}, ${w.width}, ${barHeight}, ${color});`);
+                        lines.push(`        if (pct_${w.id} > 0) {`);
+                        lines.push(`          int bar_w = (${w.width} - 4) * pct_${w.id} / 100;`);
+                        lines.push(`          it.filled_rectangle(${w.x} + 2, ${barY} + 2, bar_w, ${barHeight} - 4, ${color});`);
+                        lines.push(`        }`);
                     } else {
-                        contentLines.push(`it.rectangle(${w.x}, ${w.y} + ${w.height} - ${barHeight}, ${w.width}, ${barHeight}, ${color});`);
+                        lines.push(`        // Progress Bar (Preview)`);
+                        lines.push(`        it.rectangle(${w.x}, ${w.y} + ${w.height} - ${barHeight}, ${w.width}, ${barHeight}, ${color});`);
+                        lines.push(`        it.filled_rectangle(${w.x} + 2, ${w.y} + ${w.height} - ${barHeight} + 2, ${w.width} / 2, ${barHeight} - 4, ${color});`);
                         if (showLabel && title) {
-                            contentLines.push(`it.printf(${w.x}, ${w.y}, id(font_small), ${color}, TextAlign::TOP_LEFT, "${title}");`);
+                            lines.push(`        it.printf(${w.x}, ${w.y}, id(font_small), ${color}, TextAlign::TOP_LEFT, "${title}");`);
                         }
                     }
-                    wrapWithCondition(lines, w, contentLines);
 
                 } else if (t === "icon") {
                     const code = (p.code || "F0595").replace(/^0x/i, "");
@@ -4861,100 +4683,29 @@ function generateSnippetLocally() {
                     const color = colorProp === "white" ? "COLOR_OFF" : "COLOR_ON";
                     const fontRef = (size >= 100) ? "font_mdi_large" : "font_mdi_medium";
 
-                    contentLines.push(`// widget:icon id:${w.id} type:icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} code:${code} size:${size} color:${colorProp}`);
-                    contentLines.push(`it.print(${w.x}, ${w.y}, id(${fontRef}), ${color}, "\\U000${code}");`);
-                    wrapWithCondition(lines, w, contentLines);
-
-                } else if (t === "battery_icon") {
-                    const entityId = (w.entity_id || "").trim();
-                    const size = parseInt(p.size || 48, 10);
-                    const colorProp = p.color || "black";
-                    const color = colorProp === "white" ? "COLOR_OFF" : "COLOR_ON";
-                    const fontRef = (size >= 100) ? "font_mdi_large" : "font_mdi_medium";
-
-                    contentLines.push(`// widget:battery_icon id:${w.id} type:battery_icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} ent:${entityId} size:${size} color:${colorProp}`);
-
-                    if (entityId) {
-                        const safeId = entityId.replace(/\./g, "_").replace(/-/g, "_");
-                        contentLines.push(`{`);
-                        contentLines.push(`  float level = id(${safeId}).state;`);
-                        contentLines.push(`  const char* icon;`);
-                        contentLines.push(`  if (level <= 10) icon = "\\U000F007A";`);
-                        contentLines.push(`  else if (level <= 90) icon = "\\U000F0082";`);
-                        contentLines.push(`  else icon = "\\U000F0079";`);
-                        contentLines.push(`  it.printf(${w.x}, ${w.y}, id(${fontRef}), ${color}, "%s", icon);`);
-                        contentLines.push(`  it.printf(${w.x}, ${w.y}+${size}+2, id(font_small), ${color}, "%.0f%%", level);`);
-                        contentLines.push(`}`);
-                    } else {
-                        contentLines.push(`it.printf(${w.x}, ${w.y}, id(${fontRef}), ${color}, "\\U000F0079");`);
-                    }
-                    wrapWithCondition(lines, w, contentLines);
-
-                } else if (t === "datetime") {
-                    const format = p.format || "time_date";
-                    const timeSize = parseInt(p.time_font_size || 28, 10);
-                    const dateSize = parseInt(p.date_font_size || 16, 10);
-                    const colorProp = p.color || "black";
-                    const color = colorProp === "white" ? "COLOR_OFF" : "COLOR_ON";
-
-                    contentLines.push(`// widget:datetime id:${w.id} type:datetime x:${w.x} y:${w.y} w:${w.width} h:${w.height} format:${format}`);
-
-                    // Use inline id(ha_time).now() to avoid variable redefinition issues
-                    if (format === "time_only") {
-                        contentLines.push(`it.strftime(${w.x} + ${w.width}/2, ${w.y}, id(font_large), ${color}, TextAlign::TOP_CENTER, "%H:%M", id(ha_time).now());`);
-                    } else if (format === "date_only") {
-                        contentLines.push(`it.strftime(${w.x} + ${w.width}/2, ${w.y}, id(font_medium), ${color}, TextAlign::TOP_CENTER, "%a, %b %d", id(ha_time).now());`);
-                    } else {
-                        contentLines.push(`it.strftime(${w.x} + ${w.width}/2, ${w.y}, id(font_large), ${color}, TextAlign::TOP_CENTER, "%H:%M", id(ha_time).now());`);
-                        contentLines.push(`it.strftime(${w.x} + ${w.width}/2, ${w.y} + ${timeSize} + 4, id(font_medium), ${color}, TextAlign::TOP_CENTER, "%a, %b %d", id(ha_time).now());`);
-                    }
-                    wrapWithCondition(lines, w, contentLines);
-
-                } else if (t === "image") {
-                    const path = (p.path || "").trim();
-                    const invert = !!p.invert;
-
-                    contentLines.push(`// widget:image id:${w.id} type:image x:${w.x} y:${w.y} w:${w.width} h:${w.height} path:"${path}" invert:${invert}`);
-
-                    if (path) {
-                        // Sanitize path for ID: replace / . - space with _
-                        const safePath = path.replace(/[\/\.\-\s]/g, "_");
-                        const safeId = `img_${safePath}_${w.width}x${w.height}`;
-
-                        if (invert) {
-                            contentLines.push(`it.image(${w.x}, ${w.y}, id(${safeId}), COLOR_OFF, COLOR_ON);`);
-                        } else {
-                            contentLines.push(`it.image(${w.x}, ${w.y}, id(${safeId}));`);
-                        }
-                    } else {
-                        contentLines.push(`it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, COLOR_ON);`);
-                    }
-                    wrapWithCondition(lines, w, contentLines);
+                    lines.push(`        // widget:icon id:${w.id} type:icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} code:${code} size:${size} color:${colorProp}`);
+                    lines.push(`        it.print(${w.x}, ${w.y}, id(${fontRef}), ${color}, "\\U000${code}");`);
 
                 } else if (t === "battery_icon") {
                     const entityId = (w.entity_id || "").trim();
                     const size = parseInt(p.size || 24, 10);
                     const colorProp = p.color || "black";
                     const color = colorProp === "white" ? "COLOR_OFF" : "COLOR_ON";
-                    const fontRef = (size >= 100) ? "font_mdi_large" : "font_mdi_medium";
 
-                    contentLines.push(`// widget:battery_icon id:${w.id} type:battery_icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} ent:${entityId} size:${size} color:${colorProp} local:${!!p.is_local_sensor}`);
+                    lines.push(`        // widget:battery_icon id:${w.id} type:battery_icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} size:${size} color:${colorProp} local:${!!p.is_local_sensor}`);
 
                     if (entityId) {
                         const safeId = entityId.replace(/\./g, "_").replace(/-/g, "_");
-                        contentLines.push(`// Battery Icon for ${entityId}`);
-                        contentLines.push(`{`);
-                        contentLines.push(`  float bat_${w.id} = id(${safeId}).state;`);
-                        contentLines.push(`  if (std::isnan(bat_${w.id})) bat_${w.id} = 0;`);
-                        contentLines.push(`  // Simple battery drawing logic (placeholder)`);
-                        contentLines.push(`  it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
-                        contentLines.push(`  it.printf(${w.x}+2, ${w.y}+2, id(font_small), ${color}, "%.0f%%", bat_${w.id});`);
-                        contentLines.push(`}`);
+                        lines.push(`        // Battery Icon for ${entityId}`);
+                        lines.push(`        float bat_${w.id} = id(${safeId}).state;`);
+                        lines.push(`        if (std::isnan(bat_${w.id})) bat_${w.id} = 0;`);
+                        lines.push(`        // Simple battery drawing logic (placeholder)`);
+                        lines.push(`        it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
+                        lines.push(`        it.printf(${w.x}+2, ${w.y}+2, id(font_small), ${color}, "%.0f%%", bat_${w.id});`);
                     } else {
-                        contentLines.push(`it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
-                        contentLines.push(`it.printf(${w.x}+2, ${w.y}+2, id(font_small), ${color}, "100%");`);
+                        lines.push(`        it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
+                        lines.push(`        it.printf(${w.x}+2, ${w.y}+2, id(font_small), ${color}, "100%");`);
                     }
-                    wrapWithCondition(lines, w, contentLines);
 
                 } else if (t === "weather_icon") {
                     const entityId = (w.entity_id || "").trim();
@@ -4962,17 +4713,16 @@ function generateSnippetLocally() {
                     const colorProp = p.color || "black";
                     const color = colorProp === "white" ? "COLOR_OFF" : "COLOR_ON";
 
-                    contentLines.push(`// widget:weather_icon id:${w.id} type:weather_icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} size:${size} color:${colorProp}`);
+                    lines.push(`        // widget:weather_icon id:${w.id} type:weather_icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} size:${size} color:${colorProp}`);
 
                     if (entityId) {
                         const safeId = entityId.replace(/\./g, "_").replace(/-/g, "_");
-                        contentLines.push(`// Weather Icon for ${entityId}`);
-                        contentLines.push(`// Note: You need a mapping function or switch case to select icon based on state`);
-                        contentLines.push(`it.printf(${w.x}, ${w.y}, id(font_mdi_medium), ${color}, "\\U000F0595"); // Default to sunny`);
+                        lines.push(`        // Weather Icon for ${entityId}`);
+                        lines.push(`        // Note: You need a mapping function or switch case to select icon based on state`);
+                        lines.push(`        it.printf(${w.x}, ${w.y}, id(font_mdi_medium), ${color}, "\\U000F0595"); // Default to sunny`);
                     } else {
-                        contentLines.push(`it.printf(${w.x}, ${w.y}, id(font_mdi_medium), ${color}, "\\U000F0595");`);
+                        lines.push(`        it.printf(${w.x}, ${w.y}, id(font_mdi_medium), ${color}, "\\U000F0595");`);
                     }
-                    wrapWithCondition(lines, w, contentLines);
 
                 } else if (t === "shape_rect") {
                     const fill = !!p.fill;
@@ -4981,20 +4731,19 @@ function generateSnippetLocally() {
                     const color = colorProp === "white" ? "COLOR_OFF" : "COLOR_ON";
                     const opacity = parseInt(p.opacity || 100, 10);
 
-                    contentLines.push(`// widget:shape_rect id:${w.id} type:shape_rect x:${w.x} y:${w.y} w:${w.width} h:${w.height} fill:${fill} border:${borderWidth} opacity:${opacity} color:${colorProp}`);
+                    lines.push(`        // widget:shape_rect id:${w.id} type:shape_rect x:${w.x} y:${w.y} w:${w.width} h:${w.height} fill:${fill} border:${borderWidth} opacity:${opacity} color:${colorProp}`);
 
                     if (fill) {
-                        contentLines.push(`it.filled_rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
+                        lines.push(`        it.filled_rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
                     } else {
                         if (borderWidth <= 1) {
-                            contentLines.push(`it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
+                            lines.push(`        it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
                         } else {
-                            contentLines.push(`for (int i=0; i<${borderWidth}; i++) {`);
-                            contentLines.push(`  it.rectangle(${w.x}+i, ${w.y}+i, ${w.width}-2*i, ${w.height}-2*i, ${color});`);
-                            contentLines.push(`}`);
+                            lines.push(`        for (int i=0; i<${borderWidth}; i++) {`);
+                            lines.push(`          it.rectangle(${w.x}+i, ${w.y}+i, ${w.width}-2*i, ${w.height}-2*i, ${color});`);
+                            lines.push(`        }`);
                         }
                     }
-                    wrapWithCondition(lines, w, contentLines);
 
                 } else if (t === "shape_circle") {
                     const r = Math.min(w.width, w.height) / 2;
@@ -5006,28 +4755,61 @@ function generateSnippetLocally() {
                     const color = colorProp === "white" ? "COLOR_OFF" : "COLOR_ON";
                     const opacity = parseInt(p.opacity || 100, 10);
 
-                    contentLines.push(`// widget:shape_circle id:${w.id} type:shape_circle x:${w.x} y:${w.y} w:${w.width} h:${w.height} fill:${fill} border:${borderWidth} opacity:${opacity} color:${colorProp}`);
+                    lines.push(`        // widget:shape_circle id:${w.id} type:shape_circle x:${w.x} y:${w.y} w:${w.width} h:${w.height} fill:${fill} border:${borderWidth} opacity:${opacity} color:${colorProp}`);
 
                     if (fill) {
-                        contentLines.push(`it.filled_circle(${cx}, ${cy}, ${r}, ${color});`);
+                        lines.push(`        it.filled_circle(${cx}, ${cy}, ${r}, ${color});`);
                     } else {
-                        contentLines.push(`it.circle(${cx}, ${cy}, ${r}, ${color});`);
+                        if (borderWidth <= 1) {
+                            lines.push(`        it.circle(${cx}, ${cy}, ${r}, ${color});`);
+                        } else {
+                            lines.push(`        for (int i=0; i<${borderWidth}; i++) {`);
+                            lines.push(`          it.circle(${cx}, ${cy}, ${r}-i, ${color});`);
+                            lines.push(`        }`);
+                        }
                     }
-                    wrapWithCondition(lines, w, contentLines);
+
+                } else if (t === "datetime") {
+                    const format = p.format || "time_date";
+                    const timeSize = parseInt(p.time_font_size || 28, 10);
+                    const dateSize = parseInt(p.date_font_size || 16, 10);
+                    const colorProp = p.color || "black";
+                    const color = colorProp === "white" ? "COLOR_OFF" : "COLOR_ON";
+
+                    lines.push(`        // widget:datetime id:${w.id} type:datetime x:${w.x} y:${w.y} w:${w.width} h:${w.height} format:${format} time_font:${timeSize} date_font:${dateSize} color:${colorProp}`);
+                    lines.push(`        // Note: Requires 'time' component in ESPHome`);
+                    lines.push(`        auto now = id(homeassistant_time).now();`);
+
+                    if (format === "time_only") {
+                        lines.push(`        it.strftime(${w.x}, ${w.y}, id(font_large), ${color}, TextAlign::TOP_LEFT, "%H:%M", now);`);
+                    } else if (format === "date_only") {
+                        lines.push(`        it.strftime(${w.x}, ${w.y}, id(font_medium), ${color}, TextAlign::TOP_LEFT, "%a, %b %d", now);`);
+                    } else {
+                        lines.push(`        it.strftime(${w.x}, ${w.y}, id(font_large), ${color}, TextAlign::TOP_LEFT, "%H:%M", now);`);
+                        lines.push(`        it.strftime(${w.x}, ${w.y} + ${timeSize}, id(font_medium), ${color}, TextAlign::TOP_LEFT, "%a, %b %d", now);`);
+                    }
+
+                } else if (t === "image") {
+                    const path = p.path || "";
+                    const invert = !!p.invert;
+                    lines.push(`        // widget:image id:${w.id} type:image x:${w.x} y:${w.y} w:${w.width} h:${w.height} path:"${path}" invert:${invert}`);
+                    lines.push(`        // Note: Requires 'image' component with id matching filename`);
+                    if (path) {
+                        const filename = path.split("/").pop().replace(/\./g, "_");
+                        lines.push(`        it.image(${w.x}, ${w.y}, id(img_${filename}));`);
+                    }
 
                 } else if (t === "online_image") {
                     const url = p.url || "";
-                    contentLines.push(`// widget:online_image id:${w.id} type:online_image x:${w.x} y:${w.y} w:${w.width} h:${w.height} url:"${url}"`);
-                    contentLines.push(`// Note: Requires 'online_image' component`);
-                    contentLines.push(`it.image(${w.x}, ${w.y}, id(online_image_${w.id}));`);
-                    wrapWithCondition(lines, w, contentLines);
+                    lines.push(`        // widget:online_image id:${w.id} type:online_image x:${w.x} y:${w.y} w:${w.width} h:${w.height} url:"${url}"`);
+                    lines.push(`        // Note: Requires 'online_image' component`);
+                    lines.push(`        it.image(${w.x}, ${w.y}, id(online_image_${w.id}));`);
 
                 } else if (t === "puppet") {
                     const url = p.image_url || "";
-                    contentLines.push(`// widget:puppet id:${w.id} type:puppet x:${w.x} y:${w.y} w:${w.width} h:${w.height} url:"${url}"`);
+                    lines.push(`        // widget:puppet id:${w.id} type:puppet x:${w.x} y:${w.y} w:${w.width} h:${w.height} url:"${url}"`);
                     const puppetId = `puppet_${w.id}`.replace(/-/g, "_");
-                    contentLines.push(`it.image(${w.x}, ${w.y}, id(${puppetId}));`);
-                    wrapWithCondition(lines, w, contentLines);
+                    lines.push(`        it.image(${w.x}, ${w.y}, id(${puppetId}));`);
 
                 } else if (t === "line") {
                     const colorProp = p.color || "black";
@@ -5037,17 +4819,15 @@ function generateSnippetLocally() {
                     const x2 = w.x + dx;
                     const y2 = w.y + dy;
                     const strokeWidth = parseInt(p.stroke_width || 1, 10) || 1;
-                    contentLines.push(`// widget:line id:${w.id} type:line x:${w.x} y:${w.y} w:${w.width} h:${w.height} stroke:${strokeWidth} color:${colorProp}`);
-
+                    lines.push(`        // widget:line id:${w.id} type:line x:${w.x} y:${w.y} w:${w.width} h:${w.height} stroke:${strokeWidth} color:${colorProp}`);
                     if (strokeWidth <= 1) {
-                        contentLines.push(`it.line(${w.x}, ${w.y}, ${x2}, ${y2}, ${color});`);
+                        lines.push(`        it.line(${w.x}, ${w.y}, ${x2}, ${y2}, ${color});`);
                     } else {
-                        contentLines.push(`// line with stroke_width=${strokeWidth}`);
-                        contentLines.push("for (int i = 0; i < " + strokeWidth + "; i++) {");
-                        contentLines.push(`  it.line(${w.x}, ${w.y}+i, ${x2}, ${y2}+i, ${color});`);
-                        contentLines.push("}");
+                        lines.push(`        // line with stroke_width=${strokeWidth}`);
+                        lines.push("        for (int i = 0; i < " + strokeWidth + "; i++) {");
+                        lines.push(`          it.line(${w.x}, ${w.y}+i, ${x2}, ${y2}+i, ${color});`);
+                        lines.push("        }");
                     }
-                    wrapWithCondition(lines, w, contentLines);
                 }
             }
         }
@@ -5062,15 +4842,14 @@ async function updateSnippet(preferBackend = true) {
 
     const local = generateSnippetLocally();
 
-    if (!preferBackend || window.location.protocol === 'file:') {
-        snippetBox.value = local + "\n# Local preview (offline/fallback).";
+    if (!preferBackend) {
+        snippetBox.value = local + "\n# Local preview (no backend).";
         return;
     }
 
     try {
         // First, save the current layout to backend so it knows about the changes
         const body = getPagesPayload();
-        console.log("Saving layout payload:", JSON.stringify(body, null, 2));
         const saveResp = await fetch("/api/reterminal_dashboard/layout", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -5538,13 +5317,6 @@ if (pageSettingsSave) {
 
 async function loadLayoutFromBackend() {
     console.log("Loading layout from backend...");
-
-    if (window.location.protocol === 'file:') {
-        console.log("Running in offline mode (file protocol), skipping backend load.");
-        initDefaultLayout();
-        return;
-    }
-
     const apiBase = hasHaBackend() ? HA_API_BASE : "/api/reterminal_dashboard";
 
     try {

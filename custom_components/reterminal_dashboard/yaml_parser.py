@@ -105,6 +105,16 @@ class ParsedWidget:
     is_text_sensor: bool = False
     # Graph properties
     continuous: bool = True
+    duration: str | None = None
+    min_value: str | None = None
+    max_value: str | None = None
+    min_range: str | None = None
+    max_range: str | None = None
+    x_grid: str | None = None
+    y_grid: str | None = None
+    line_type: str | None = None
+    line_thickness: int | None = None
+    show_axis_labels: bool = False
     # Conditional visibility properties
     condition_entity: str | None = None
     condition_operator: str | None = None
@@ -158,12 +168,31 @@ def yaml_to_layout(snippet: str) -> DeviceConfig:
     if pages is None:
         raise ValueError("no_pages_found")
 
+    # Extract global settings
+    orientation = "landscape"
+    model = "7.50inv2"
+    dark_mode = False
+    
+    # Check display platform for model
+    display_conf = data.get("display", [])
+    if isinstance(display_conf, list):
+        for d in display_conf:
+            if d.get("platform") == "waveshare_epaper":
+                model = str(d.get("model", "7.50inv2"))
+                break
+
+    # We don't have explicit orientation/dark_mode in YAML usually, 
+    # but we can infer or default.
+    
     device = DeviceConfig(
-        device_id="reterminal_e1001",
-        api_token="",
-        name="reTerminal E1001",
-        pages=[],
-        current_page=0,
+        device_id="imported_device",
+        api_token="imported_token",
+        name="reTerminal E1001", # Default name for imported devices
+        pages=[], # Pages will be populated below
+        current_page=0, # Default current page
+        orientation=orientation,
+        model=model,
+        dark_mode=dark_mode
     )
 
     # Convert parsed pages to PageConfig/WidgetConfig
@@ -222,7 +251,18 @@ def yaml_to_layout(snippet: str) -> DeviceConfig:
             if pw.is_text_sensor: props["is_text_sensor"] = True
             
             # Graph properties
+            # Graph properties
             if pw.continuous is not None: props["continuous"] = pw.continuous
+            if pw.duration is not None: props["duration"] = pw.duration
+            if pw.min_value is not None: props["min_value"] = pw.min_value
+            if pw.max_value is not None: props["max_value"] = pw.max_value
+            if pw.min_range is not None: props["min_range"] = pw.min_range
+            if pw.max_range is not None: props["max_range"] = pw.max_range
+            if pw.x_grid is not None: props["x_grid"] = pw.x_grid
+            if pw.y_grid is not None: props["y_grid"] = pw.y_grid
+            if pw.line_type is not None: props["line_type"] = pw.line_type
+            if pw.line_thickness is not None: props["line_thickness"] = pw.line_thickness
+            if pw.show_axis_labels: props["show_axis_labels"] = True
             
             # Conditional visibility properties
             if pw.condition_entity is not None:
@@ -514,6 +554,18 @@ def _parse_widget_line(line: str) -> ParsedWidget | None:
         if continuous is None:
             continuous = True
 
+        # Graph properties
+        duration = meta.get("duration")
+        min_value = meta.get("min_value")
+        max_value = meta.get("max_value")
+        min_range = meta.get("min_range")
+        max_range = meta.get("max_range")
+        x_grid = meta.get("x_grid")
+        y_grid = meta.get("y_grid")
+        line_type = meta.get("line_type")
+        line_thickness = parse_int(meta.get("line_thickness"))
+        show_axis_labels = parse_bool(meta.get("show_axis_labels")) or False
+
         # Conditional visibility parsing
         condition_entity = meta.get("condition_entity")
         condition_operator = meta.get("condition_operator")
@@ -558,6 +610,16 @@ def _parse_widget_line(line: str) -> ParsedWidget | None:
             is_local_sensor=is_local_sensor or False,
             is_text_sensor=is_text_sensor or False,
             continuous=continuous,
+            duration=duration,
+            min_value=min_value,
+            max_value=max_value,
+            min_range=min_range,
+            max_range=max_range,
+            x_grid=x_grid,
+            y_grid=y_grid,
+            line_type=line_type,
+            line_thickness=line_thickness,
+            show_axis_labels=show_axis_labels,
             condition_entity=condition_entity,
             condition_operator=condition_operator,
             condition_state=condition_state,

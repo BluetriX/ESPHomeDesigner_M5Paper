@@ -1,5 +1,15 @@
 # Release Notes
 
+## v0.4.6
+- **Number Sensor Fix**: Fixed a bug where number sensors were interpreted as text sensors, causing them to show gibberish or fail to compile.
+- **Graph Improvements**: X and Y information are now automatically added if the user adds min/max information or time information in the widget settings.
+- **Graph Persistence**: Fixed a bug where graph minimum/maximum values and duration were not saving to YAML. These values would reset when "Update Layout from YAML" was pressed.
+- **Known Bugs**:
+    - Puppet widget is still unstable.
+    - Straight lines are not perfectly straight.
+    - Visible conditions are not fully tested and might fail to compile.
+
+
 ## v0.4.5
 - **Min/Max Visibility**: Added support for numeric range conditions (Min/Max) with AND/OR logic for widget visibility. Perfect for progress bars (e.g., `0 < value < 100`).
 - **Boot Stability**: Updated the default hardware template (`reterminal_e1001_lambda.yaml`) to remove the immediate display update from `on_boot`, preventing boot loops on heavy layouts.

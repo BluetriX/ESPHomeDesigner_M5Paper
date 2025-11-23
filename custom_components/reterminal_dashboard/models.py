@@ -229,6 +229,7 @@ class DeviceConfig:
 
     # Layout-wide settings
     orientation: str = "landscape"
+    model: str = "7.50inv2"
     dark_mode: bool = False
     
     # Energy Saving / Night Mode
@@ -294,6 +295,7 @@ class DeviceConfig:
             "name": self.name,
             "current_page": self.current_page,
             "orientation": self.orientation,
+            "model": self.model,
             "dark_mode": self.dark_mode,
             "sleep_enabled": self.sleep_enabled,
             "sleep_start_hour": self.sleep_start_hour,
@@ -362,6 +364,7 @@ class DeviceConfig:
             pages=pages,
             current_page=current_page,
             orientation=orientation,
+            model=str(data.get("model", "7.50inv2")),
             dark_mode=dark_mode,
             sleep_enabled=sleep_enabled,
             sleep_start_hour=sleep_start_hour,

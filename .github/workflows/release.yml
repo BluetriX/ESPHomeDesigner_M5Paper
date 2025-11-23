@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'custom_components/reterminal_dashboard/manifest.json'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Read version from manifest.json
+        id: version
+        run: |
+          VERSION=$(jq -r .version custom_components/reterminal_dashboard/manifest.json)
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

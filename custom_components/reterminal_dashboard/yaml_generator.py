@@ -79,12 +79,12 @@ def generate_snippet(device: DeviceConfig) -> str:
     # NOTE: output, rtttl, sensor, time are provided by hardware template
     # We only generate: globals, fonts, text_sensor, button, script, display
     
-    # Pre-classify entities to determine numeric vs text
-    text_entity_ids, numeric_entity_ids = _classify_entities(device)
+    # Pre-classify entities to determine numeric vs text vs local
+    text_entity_ids, numeric_entity_ids, local_entity_ids = _classify_entities(device)
     
     parts.append(_generate_globals())
     parts.append(_generate_fonts(device))  # Pass device to collect icon glyphs
-    parts.append(_generate_text_sensors(device, text_entity_ids, numeric_entity_ids))  # Only text_sensors for HA entities
+    parts.append(_generate_text_sensors(device, text_entity_ids, numeric_entity_ids, local_entity_ids))  # Only text_sensors for HA entities
     parts.append(_generate_online_images(device))
     parts.append(_generate_deep_sleep(device))
     parts.append(_generate_navigation_buttons(device))
@@ -345,7 +345,7 @@ def _generate_fonts(device: DeviceConfig) -> str:
 # Removed _generate_outputs_and_buzzer() - now in hardware template
 
 
-def _generate_text_sensors(device: DeviceConfig, text_entity_ids: set[str], numeric_entity_ids: dict[str, int]) -> str:
+def _generate_text_sensors(device: DeviceConfig, text_entity_ids: set[str], numeric_entity_ids: dict[str, int], local_entity_ids: set[str]) -> str:
     """
     Generate text_sensor and sensor blocks for HomeAssistant entities.
     - text_sensor: for sensor_text widgets (string values)
@@ -353,6 +353,8 @@ def _generate_text_sensors(device: DeviceConfig, text_entity_ids: set[str], nume
     
     NOTE: To avoid "Duplicate key" errors, we output these as commented instructions
     or a list of items that the user must paste into their existing config.
+    
+    Local entities are skipped entirely as they are defined in the base ESPHome config.
     """
             
     sections = []
@@ -361,6 +363,9 @@ def _generate_text_sensors(device: DeviceConfig, text_entity_ids: set[str], nume
     if text_entity_ids:
         sections.append("text_sensor:")
         for entity_id in sorted(text_entity_ids):
+            # Skip local sensors - they are defined in base config
+            if entity_id in local_entity_ids:
+                continue
             # Skip local IDs (no dot) - assume they are defined elsewhere
             if "." not in entity_id:
                 continue
@@ -379,6 +384,9 @@ def _generate_text_sensors(device: DeviceConfig, text_entity_ids: set[str], nume
         sections.append("# ============================================================================")
         sections.append("# sensor:")
         for entity_id in sorted(numeric_entity_ids.keys()):
+            # Skip local sensors - they are defined in base config
+            if entity_id in local_entity_ids:
+                continue
             # Skip local IDs (no dot)
             if "." not in entity_id:
                 continue
@@ -399,15 +407,17 @@ def _generate_text_sensors(device: DeviceConfig, text_entity_ids: set[str], nume
     return "\n".join(sections) + "\n"
 
 
-def _classify_entities(device: DeviceConfig) -> tuple[set[str], dict[str, int]]:
+def _classify_entities(device: DeviceConfig) -> tuple[set[str], dict[str, int], set[str]]:
     """
     Scan all widgets to determine which entities are text-based and which are numeric.
     Returns:
         text_entity_ids: Set of entity IDs to be treated as text_sensor
         numeric_entity_ids: Dict of entity IDs to be treated as sensor (value is precision)
+        local_entity_ids: Set of entity IDs that are local/on-device (should not be generated)
     """
     text_entity_ids = set()
     numeric_entity_ids = {}  # Map entity_id -> max precision found (-1 = default)
+    local_entity_ids = set()  # Track local sensors
     
     for page in device.pages:
         for widget in page.widgets:
@@ -418,9 +428,10 @@ def _classify_entities(device: DeviceConfig) -> tuple[set[str], dict[str, int]]:
             wtype = (widget.type or "").lower()
             props = widget.props or {}
             
-            # Check if marked as local sensor
-            if props.get("is_local_sensor"):
-                continue
+            # Check both 'is_local_sensor' and 'local' for compatibility
+            is_local = props.get("is_local_sensor") or props.get("local")
+            if is_local:
+                local_entity_ids.add(entity_id)
             
             # Widgets that need numeric (float) values
             if wtype in ("progress_bar", "battery_icon", "graph"):
@@ -432,19 +443,18 @@ def _classify_entities(device: DeviceConfig) -> tuple[set[str], dict[str, int]]:
                     text_entity_ids.add(entity_id)
             # sensor_text can be numeric if precision is specified
             elif wtype == "sensor_text":
-                # Check if explicitly marked as text sensor
-                if props.get("is_text_sensor"):
-                    if entity_id not in numeric_entity_ids:
-                        text_entity_ids.add(entity_id)
-                    continue
-
                 precision = int(props.get("precision", -1))
-                if precision >= 0:
-                    # It's numeric
+                
+                # Local sensors are ALWAYS numeric
+                if is_local:
                     current = numeric_entity_ids.get(entity_id, -2)
                     numeric_entity_ids[entity_id] = max(current, precision)
+                # Has precision specified - treat as numeric
+                elif precision >= 0:
+                    current = numeric_entity_ids.get(entity_id, -2)
+                    numeric_entity_ids[entity_id] = max(current, precision)
+                # Default to text for HA entities without precision
                 else:
-                    # It's text (or we treat it as text if no precision specified)
                     if entity_id not in numeric_entity_ids:
                         text_entity_ids.add(entity_id)
             # Other widgets
@@ -457,7 +467,7 @@ def _classify_entities(device: DeviceConfig) -> tuple[set[str], dict[str, int]]:
         if eid in numeric_entity_ids:
             text_entity_ids.remove(eid)
             
-    return text_entity_ids, numeric_entity_ids
+    return text_entity_ids, numeric_entity_ids, local_entity_ids
 
 
 def _generate_navigation_buttons(device: DeviceConfig) -> str:
@@ -780,7 +790,7 @@ def _generate_display_block(device: DeviceConfig, numeric_entity_ids: dict[str, 
     lines.append("display:")
     lines.append("  - platform: waveshare_epaper")
     lines.append("    id: epaper_display")
-    lines.append("    model: 7.50inv2")
+    lines.append(f"    model: {getattr(device, 'model', '7.50inv2')}")
     lines.append("    cs_pin: GPIO10")
     lines.append("    dc_pin: GPIO11")
     lines.append("    reset_pin:")
@@ -792,8 +802,8 @@ def _generate_display_block(device: DeviceConfig, numeric_entity_ids: dict[str, 
     lines.append("    update_interval: never")
     lines.append("    lambda: |-")
     lines.append("      // Define common colors for widgets")
-    lines.append("      Color COLOR_ON = Color::BLACK;")
-    lines.append("      Color COLOR_OFF = Color::WHITE;")
+    lines.append("      Color COLOR_ON = Color(1);")
+    lines.append("      Color COLOR_OFF = Color(0);")
     lines.append("      it.fill(COLOR_OFF);")
     lines.append("")
 
@@ -1122,42 +1132,44 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig, num
             else:
                 safe_id = entity_id
             
-            # Add marker comment for parser with font sizes and font_family
-            is_local = "true" if props.get("is_local_sensor") else "false"
-            is_text_sensor = "true" if props.get("is_text_sensor") else "false"
-            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} ent:{entity_id} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family} font_weight:{font_weight} precision:{precision} local:{is_local} text_sensor:{is_text_sensor} color:{base_color}')
-            
-            # Determine value expression and format string
+            # Determine if entity is numeric
+            is_numeric = entity_id in numeric_entity_ids
+            # Force text mode if explicitly requested
+            if props.get("is_text_sensor"):
+                is_numeric = False
+                
+            # Format string and value expression
             unit = props.get("unit", "")
-            
-            # Check if it's a numeric sensor (float state)
-            # If precision is set OR it's a 'sensor.' domain, treat as float.
-            # ESPHome 'sensor' components always have float state.
-            is_numeric = (precision >= 0) or entity_id.startswith("sensor.")
-            
             if is_numeric:
-                # Numeric sensor
-                p = precision if precision >= 0 else 1  # Default to 1 decimal if not set
+                precision = int(props.get("precision", -1))
+                if precision < 0:
+                    fmt = "%.1f"
+                else:
+                    fmt = f"%.{precision}f"
                 val_expr = f"id({safe_id}).state"
-                fmt_spec = f"%.{p}f{unit}"
             else:
-                # Text sensor or other (string state)
+                fmt = "%s"
                 val_expr = f"id({safe_id}).state.c_str()"
-                fmt_spec = f"%s{unit}"
+                
+            # Add marker comment for parser
+            # CRITICAL: Parser depends on exact format
+            is_local = "true" if props.get("is_local_sensor") else "false"
+            is_text = "true" if not is_numeric else "false"
+            text_align = props.get("text_align", "TOP_LEFT").upper()
+            
+            label_font = _resolve_font_by_size(label_font_size, font_weight)
+            value_font = _resolve_font_by_size(value_font_size, font_weight)
+
+            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} ent:{entity_id} title:"{label}" format:{value_format} label_font:{label_font_size} value_font:{value_font_size} color:{base_color} align:{text_align} precision:{props.get("precision", -1)} unit:"{unit}" local:{is_local} text_sensor:{is_text}')
 
             if value_format == "label_newline_value" and label:
-                # Label on one line, value on another - use separate fonts
-                label_font = _resolve_font_by_size(label_font_size, font_weight)
-                value_font = _resolve_font_by_size(value_font_size, font_weight)
-                # Print label
-                content.append(f'{indent}it.printf({x}, {y}, {label_font}, {fg}, "{label}");')
-                # Print value below label (approximate line height)
-                value_y = y + label_font_size + 4
-                content.append(f'{indent}it.printf({x}, {value_y}, {value_font}, {fg}, "{fmt_spec}", {val_expr});')
+                # Label on top, value below
+                content.append(f'{indent}it.printf({x}, {y}, {label_font}, {fg}, TextAlign::{text_align}, "{label}");')
+                # Value below label
+                content.append(f'{indent}it.printf({x}, {y} + {label_font_size} + 2, {value_font}, {fg}, TextAlign::{text_align}, "{fmt}%s", {val_expr}, "{unit}");')
             elif value_format == "label_value" and label:
-                # Inline format: "Label: Value" - use average size or value size
-                font = _resolve_font_by_size(value_font_size, font_weight)
-                content.append(f'{indent}it.printf({x}, {y}, {font}, {fg}, "{label}: {fmt_spec}", {val_expr});')
+                # Inline format: "Label: Value"
+                content.append(f'{indent}it.printf({x}, {y}, {value_font}, {fg}, TextAlign::{text_align}, "{label}: {fmt}%s", {val_expr}, "{unit}");')
             else:
                 # value_only or no label - just show value
                 font = _resolve_font_by_size(value_font_size, font_weight)
@@ -1538,13 +1550,35 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig, num
             content.append(f'{indent}it.line({x}, {y}+{h}, {x}+{w}, {y}, {fg});')
             content.append(f'{indent}it.printf({x}+5, {y}+5, id(font_small), {fg}, "Graph (no entity)");')
         else:
-            content.append(f'{indent}// widget:graph id:{widget.id} type:graph x:{x} y:{y} w:{w} h:{h} entity:{entity_id} duration:"{duration}" border:{border} color:{color_prop} x_grid:{x_grid} y_grid:{y_grid} line_type:{line_type} line_thickness:{line_thickness} min_value:{min_value} max_value:{max_value} min_range:{min_range} max_range:{max_range} continuous:{continuous} local:{is_local} title:"{title}"')
+            show_axis_labels = "true" if props.get("show_axis_labels") else "false"
+            content.append(f'{indent}// widget:graph id:{widget.id} type:graph x:{x} y:{y} w:{w} h:{h} entity:"{entity_id}" duration:"{duration}" border:"{border}" color:"{color_prop}" x_grid:"{x_grid}" y_grid:"{y_grid}" line_type:"{line_type}" line_thickness:"{line_thickness}" min_value:"{min_value}" max_value:"{max_value}" min_range:"{min_range}" max_range:"{max_range}" continuous:"{continuous}" local:"{is_local}" title:"{title}" show_axis_labels:"{show_axis_labels}"')
             content.append(f'{indent}it.graph({x}, {y}, id({safe_id}));')
             
             # Render title if present
             if title:
                 # Draw title in top-left corner with small font
                 content.append(f'{indent}it.printf({x}+4, {y}+2, id(font_small), {fg}, "{title}");')
+
+            # Render Axis Labels if enabled and min/max are set
+            if props.get("show_axis_labels") and min_value and max_value:
+                # Smart Positioning: Flip Y-axis labels if too close to left edge
+                flip_y = x < 30
+                
+                # Y-Axis Labels
+                if flip_y:
+                    # Right side
+                    content.append(f'{indent}it.printf({x}+{w}+2, {y}-6, id(font_axis), {fg}, TextAlign::TOP_LEFT, "{max_value}");')
+                    content.append(f'{indent}it.printf({x}+{w}+2, {y}+{h}-6, id(font_axis), {fg}, TextAlign::BOTTOM_LEFT, "{min_value}");')
+                else:
+                    # Left side
+                    content.append(f'{indent}it.printf({x}-2, {y}-6, id(font_axis), {fg}, TextAlign::TOP_RIGHT, "{max_value}");')
+                    content.append(f'{indent}it.printf({x}-2, {y}+{h}-6, id(font_axis), {fg}, TextAlign::BOTTOM_RIGHT, "{min_value}");')
+                
+                # X-Axis Labels
+                # Start (Duration)
+                content.append(f'{indent}it.printf({x}, {y}+{h}+2, id(font_axis), {fg}, TextAlign::TOP_LEFT, "-{duration}");')
+                # End (Now)
+                content.append(f'{indent}it.printf({x}+{w}, {y}+{h}+2, id(font_axis), {fg}, TextAlign::TOP_RIGHT, "Now");')
 
         _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
