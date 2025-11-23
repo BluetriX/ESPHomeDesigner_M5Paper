@@ -102,8 +102,16 @@ class ParsedWidget:
     date_font_size: int | None = None
     # Local sensor flag
     is_local_sensor: bool = False
+    is_text_sensor: bool = False
     # Graph properties
     continuous: bool = True
+    # Conditional visibility properties
+    condition_entity: str | None = None
+    condition_operator: str | None = None
+    condition_state: str | None = None
+    condition_min: float | None = None
+    condition_max: float | None = None
+    condition_logic: str | None = None
 
 
 def yaml_to_layout(snippet: str) -> DeviceConfig:
@@ -211,15 +219,32 @@ def yaml_to_layout(snippet: str) -> DeviceConfig:
             
             # Local sensor flag
             if pw.is_local_sensor: props["is_local_sensor"] = True
+            if pw.is_text_sensor: props["is_text_sensor"] = True
             
             # Graph properties
             if pw.continuous is not None: props["continuous"] = pw.continuous
+            
+            # Conditional visibility properties
+            if pw.condition_entity is not None:
+                wc.condition_entity = pw.condition_entity
+            if pw.condition_operator is not None:
+                wc.condition_operator = pw.condition_operator
+            if pw.condition_state is not None:
+                wc.condition_state = pw.condition_state
+            if pw.condition_min is not None:
+                wc.condition_min = pw.condition_min
+            if pw.condition_max is not None:
+                wc.condition_max = pw.condition_max
+            if pw.condition_logic is not None:
+                wc.condition_logic = pw.condition_logic
 
             # Handle special cases for text/icon size mapping if needed
             if pw.type == "text" and "font_size" not in props and "size" in props:
                 props["font_size"] = props["size"]
             if pw.type == "icon" and "size" not in props and "font_size" in props:
                 props["size"] = props["font_size"]
+            if pw.type == "puppet" and "url" in props:
+                props["image_url"] = props["url"]
 
             wc = WidgetConfig(
                 id=pw.id,
@@ -374,7 +399,20 @@ def _parse_widget_line(line: str) -> ParsedWidget | None:
         # // widget:label id:w_x type:label x:10 y:20 w:200 h:40 text:Title
         # // widget:icon id:w_x type:icon x:10 y:20 w:60 h:60 code:F0595
         # // widget:sensor_text id:w_x type:sensor_text x:10 y:20 w:200 h:60 ent:sensor.entity title:"Label"
-        parts = line.replace("//", "").strip().split()
+        # CRITICAL: Do NOT use replace("//", "") as it breaks URLs (http:// -> http:)
+        parts = line[len("// widget:"):].strip().split()
+        # Re-insert the type which was part of the marker we just stripped, or rely on type: key
+        # The original code expected parts[0] to be 'widget:type', but we stripped it.
+        # Let's adjust to robustly handle the parts.
+        # Actually, the original code did: line.replace("//", "").strip().split()
+        # which resulted in "widget:label id:..."
+        # So parts[0] was "widget:label".
+        
+        # Let's do it safely:
+        clean_line = line.strip()
+        if clean_line.startswith("//"):
+            clean_line = clean_line[2:].strip()
+        parts = clean_line.split()
         meta: Dict[str, str] = {}
         
         # Handle quoted values (e.g., title:"My Label")
@@ -441,6 +479,14 @@ def _parse_widget_line(line: str) -> ParsedWidget | None:
                     pass
             return None
         
+        def parse_float(val: str | None) -> float | None:
+            if val:
+                try:
+                    return float(val)
+                except ValueError:
+                    pass
+            return None
+        
         # Parse boolean properties
         def parse_bool(val: str | None) -> bool | None:
             if val is None:
@@ -463,9 +509,18 @@ def _parse_widget_line(line: str) -> ParsedWidget | None:
         show_label = parse_bool(meta.get("show_label"))
         show_percentage = parse_bool(meta.get("show_percentage")) or parse_bool(meta.get("show_pct"))
         is_local_sensor = parse_bool(meta.get("local"))
+        is_text_sensor = parse_bool(meta.get("text_sensor"))
         continuous = parse_bool(meta.get("continuous"))
         if continuous is None:
             continuous = True
+
+        # Conditional visibility parsing
+        condition_entity = meta.get("condition_entity")
+        condition_operator = meta.get("condition_operator")
+        condition_state = meta.get("condition_state")
+        condition_min = parse_float(meta.get("condition_min"))
+        condition_max = parse_float(meta.get("condition_max"))
+        condition_logic = meta.get("condition_logic")
 
         return ParsedWidget(
             id=wid,
@@ -501,7 +556,14 @@ def _parse_widget_line(line: str) -> ParsedWidget | None:
             time_font_size=time_font_size,
             date_font_size=date_font_size,
             is_local_sensor=is_local_sensor or False,
+            is_text_sensor=is_text_sensor or False,
             continuous=continuous,
+            condition_entity=condition_entity,
+            condition_operator=condition_operator,
+            condition_state=condition_state,
+            condition_min=condition_min,
+            condition_max=condition_max,
+            condition_logic=condition_logic,
         )
 
     # Pattern 2: simple printf (VERY conservative)

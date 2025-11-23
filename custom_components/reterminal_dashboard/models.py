@@ -90,6 +90,9 @@ class WidgetConfig:
     condition_entity: Optional[str] = None  # Entity to check for visibility
     condition_state: Optional[str] = None  # Expected state for visibility
     condition_operator: Optional[str] = None  # Comparison operator: "==", "!=", ">", "<", ">=", "<="
+    condition_min: Optional[float] = None
+    condition_max: Optional[float] = None
+    condition_logic: Optional[str] = None
 
     # Arbitrary widget-specific properties; see type doc above.
     props: Dict[str, Any] = field(default_factory=dict)
@@ -146,6 +149,18 @@ class PageConfig:
         widgets_data = data.get("widgets", []) or []
         widgets: List[WidgetConfig] = []
         for w in widgets_data:
+            # Parse min/max safely
+            c_min = w.get("condition_min")
+            c_max = w.get("condition_max")
+            try:
+                c_min = float(c_min) if c_min is not None and c_min != "" else None
+            except (ValueError, TypeError):
+                c_min = None
+            try:
+                c_max = float(c_max) if c_max is not None and c_max != "" else None
+            except (ValueError, TypeError):
+                c_max = None
+
             widget = WidgetConfig(
                 id=str(w.get("id", "")),
                 type=str(w.get("type", "label")),
@@ -159,6 +174,9 @@ class PageConfig:
                 condition_entity=w.get("condition_entity"),
                 condition_state=w.get("condition_state"),
                 condition_operator=w.get("condition_operator"),
+                condition_min=c_min,
+                condition_max=c_max,
+                condition_logic=w.get("condition_logic"),
                 props=w.get("props") or {},
             )
             widget.clamp_to_canvas()

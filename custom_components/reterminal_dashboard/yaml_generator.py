@@ -78,15 +78,19 @@ def generate_snippet(device: DeviceConfig) -> str:
     # Core pieces (ordered for readability)
     # NOTE: output, rtttl, sensor, time are provided by hardware template
     # We only generate: globals, fonts, text_sensor, button, script, display
+    
+    # Pre-classify entities to determine numeric vs text
+    text_entity_ids, numeric_entity_ids = _classify_entities(device)
+    
     parts.append(_generate_globals())
     parts.append(_generate_fonts(device))  # Pass device to collect icon glyphs
-    parts.append(_generate_text_sensors(device))  # Only text_sensors for HA entities
+    parts.append(_generate_text_sensors(device, text_entity_ids, numeric_entity_ids))  # Only text_sensors for HA entities
     parts.append(_generate_online_images(device))
     parts.append(_generate_deep_sleep(device))
     parts.append(_generate_navigation_buttons(device))
     parts.append(_generate_scripts(device))
     parts.append(_generate_graphs(device))
-    parts.append(_generate_display_block(device))
+    parts.append(_generate_display_block(device, numeric_entity_ids))
 
     # Join with double newlines between major sections
     return "\n\n".join(p for p in parts if p.strip())
@@ -156,7 +160,7 @@ def _generate_fonts(device: DeviceConfig) -> str:
             wtype = (widget.type or "").lower()
             if wtype == "icon":
                 props = widget.props or {}
-                code = props.get("code", "").strip()
+                code = (props.get("code") or "").strip()
                 if code:
                     icon_codes.add(code)
                 # Collect icon size if specified
@@ -214,7 +218,7 @@ def _generate_fonts(device: DeviceConfig) -> str:
                     text_sizes.add((date_size, 400)) # Date usually regular
             elif wtype == "image":
                 props = widget.props or {}
-                path = props.get("path", "").strip()
+                path = (props.get("path") or "").strip()
                 if path:
                     # Replicate clamping logic to match _append_widget_render
                     x = max(0, min(widget.x, IMAGE_WIDTH))
@@ -341,7 +345,7 @@ def _generate_fonts(device: DeviceConfig) -> str:
 # Removed _generate_outputs_and_buzzer() - now in hardware template
 
 
-def _generate_text_sensors(device: DeviceConfig) -> str:
+def _generate_text_sensors(device: DeviceConfig, text_entity_ids: set[str], numeric_entity_ids: dict[str, int]) -> str:
     """
     Generate text_sensor and sensor blocks for HomeAssistant entities.
     - text_sensor: for sensor_text widgets (string values)
@@ -350,7 +354,58 @@ def _generate_text_sensors(device: DeviceConfig) -> str:
     NOTE: To avoid "Duplicate key" errors, we output these as commented instructions
     or a list of items that the user must paste into their existing config.
     """
-    # Collect entity_ids by type
+            
+    sections = []
+    
+    # Generate text_sensor section for text-based widgets
+    if text_entity_ids:
+        sections.append("text_sensor:")
+        for entity_id in sorted(text_entity_ids):
+            # Skip local IDs (no dot) - assume they are defined elsewhere
+            if "." not in entity_id:
+                continue
+            safe_id = entity_id.replace(".", "_").replace("-", "_")
+            sections.append(f"""  - platform: homeassistant
+    id: {safe_id}
+    entity_id: {entity_id}
+    internal: true""")
+        sections.append("")
+    
+    # Generate sensor section for numeric widgets
+    # Generate sensor section for numeric widgets
+    if numeric_entity_ids:
+        sections.append("# ============================================================================")
+        sections.append("# INSTRUCTION: Copy these sensors into your existing 'sensor:' section")
+        sections.append("# ============================================================================")
+        sections.append("# sensor:")
+        for entity_id in sorted(numeric_entity_ids.keys()):
+            # Skip local IDs (no dot)
+            if "." not in entity_id:
+                continue
+            safe_id = entity_id.replace(".", "_").replace("-", "_")
+            precision = numeric_entity_ids[entity_id]
+            
+            sections.append(f"""#   - platform: homeassistant
+#     id: {safe_id}
+#     entity_id: {entity_id}
+#     internal: true""")
+            if precision >= 0:
+                sections.append(f"#     accuracy_decimals: {precision}")
+        sections.append("")
+    
+    if not sections:
+        return "# No widgets with entities configured"
+    
+    return "\n".join(sections) + "\n"
+
+
+def _classify_entities(device: DeviceConfig) -> tuple[set[str], dict[str, int]]:
+    """
+    Scan all widgets to determine which entities are text-based and which are numeric.
+    Returns:
+        text_entity_ids: Set of entity IDs to be treated as text_sensor
+        numeric_entity_ids: Dict of entity IDs to be treated as sensor (value is precision)
+    """
     text_entity_ids = set()
     numeric_entity_ids = {}  # Map entity_id -> max precision found (-1 = default)
     
@@ -377,22 +432,19 @@ def _generate_text_sensors(device: DeviceConfig) -> str:
                     text_entity_ids.add(entity_id)
             # sensor_text can be numeric if precision is specified
             elif wtype == "sensor_text":
+                # Check if explicitly marked as text sensor
+                if props.get("is_text_sensor"):
+                    if entity_id not in numeric_entity_ids:
+                        text_entity_ids.add(entity_id)
+                    continue
+
                 precision = int(props.get("precision", -1))
                 if precision >= 0:
                     # It's numeric
                     current = numeric_entity_ids.get(entity_id, -2)
-                    # Update precision if this widget needs higher (or specific) precision
-                    # For simplicity, if multiple widgets use same sensor with diff precision,
-                    # we pick the one specified (or max). ESPHome sensor only has one accuracy_decimals.
-                    # Let's just use the last one or max.
                     numeric_entity_ids[entity_id] = max(current, precision)
                 else:
                     # It's text (or we treat it as text if no precision specified)
-                    # But if it was already marked numeric by another widget, keep it numeric?
-                    # If a sensor is used as both text and numeric, it must be a sensor (numeric) 
-                    # because text_sensor can't easily be graphed.
-                    # But if it's a string state, sensor will fail.
-                    # We assume if it's used in a graph/bar, it's numeric.
                     if entity_id not in numeric_entity_ids:
                         text_entity_ids.add(entity_id)
             # Other widgets
@@ -405,44 +457,7 @@ def _generate_text_sensors(device: DeviceConfig) -> str:
         if eid in numeric_entity_ids:
             text_entity_ids.remove(eid)
             
-    sections = []
-    
-    # Generate text_sensor section for text-based widgets
-    if text_entity_ids:
-        sections.append("text_sensor:")
-        for entity_id in sorted(text_entity_ids):
-            # Skip local IDs (no dot) - assume they are defined elsewhere
-            if "." not in entity_id:
-                continue
-            safe_id = entity_id.replace(".", "_").replace("-", "_")
-            sections.append(f"""  - platform: homeassistant
-    id: {safe_id}
-    entity_id: {entity_id}
-    internal: true""")
-        sections.append("")
-    
-    # Generate sensor section for numeric widgets
-    if numeric_entity_ids:
-        sections.append("sensor:")
-        for entity_id in sorted(numeric_entity_ids.keys()):
-            # Skip local IDs (no dot)
-            if "." not in entity_id:
-                continue
-            safe_id = entity_id.replace(".", "_").replace("-", "_")
-            precision = numeric_entity_ids[entity_id]
-            
-            sections.append(f"""  - platform: homeassistant
-    id: {safe_id}
-    entity_id: {entity_id}
-    internal: true""")
-            if precision >= 0:
-                sections.append(f"    accuracy_decimals: {precision}")
-        sections.append("")
-    
-    if not sections:
-        return "# No widgets with entities configured"
-    
-    return "\n".join(sections) + "\n"
+    return text_entity_ids, numeric_entity_ids
 
 
 def _generate_navigation_buttons(device: DeviceConfig) -> str:
@@ -744,7 +759,7 @@ def _generate_graphs(device: DeviceConfig) -> str:
     return "\n".join(lines)
 
 
-def _generate_display_block(device: DeviceConfig) -> str:
+def _generate_display_block(device: DeviceConfig, numeric_entity_ids: dict[str, int]) -> str:
     """
     Generate the display: epaper_display block with a lambda that:
     - Reads current display_page.
@@ -776,11 +791,14 @@ def _generate_display_block(device: DeviceConfig) -> str:
     lines.append("      inverted: true")
     lines.append("    update_interval: never")
     lines.append("    lambda: |-")
-    lines.append("      it.fill(Color(0));")
+    lines.append("      // Define common colors for widgets")
+    lines.append("      Color COLOR_ON = Color::BLACK;")
+    lines.append("      Color COLOR_OFF = Color::WHITE;")
+    lines.append("      it.fill(COLOR_OFF);")
     lines.append("")
 
     for page_index, page in enumerate(device.pages):
-        _append_page_render(lines, page_index, page)
+        _append_page_render(lines, page_index, page, numeric_entity_ids)
 
     return "\n".join(lines)
 
@@ -793,16 +811,24 @@ def _generate_online_images(device: DeviceConfig) -> str:
     image_widgets = []
     for pidx, page in enumerate(device.pages):
         for widget in page.widgets:
-            if (widget.type or "").lower() == "online_image":
+            wtype = (widget.type or "").lower()
+            if wtype == "online_image" or wtype == "puppet":
                 image_widgets.append((pidx, widget))
 
     if not image_widgets:
         return "# No online_image widgets configured"
 
-    lines: List[str] = ["# Remote/puppet images (online_image)"]
+    lines: List[str] = [
+        "# Remote/puppet images (online_image)",
+        "# Required dependency for online_image",
+        "http_request:",
+        "  timeout: 20s",
+        "  verify_ssl: false",
+        ""
+    ]
     for pidx, widget in image_widgets:
         props = widget.props or {}
-        url = (props.get("url") or "").strip()
+        url = (props.get("url") or props.get("image_url") or "").strip()
         interval = int(props.get("interval_s") or 300)
         # Safe id for ESPHome
         safe_id = f"img_{widget.id}".replace("-", "_")
@@ -816,19 +842,26 @@ def _generate_online_images(device: DeviceConfig) -> str:
         lines.append("    on_download_finished:")
         lines.append("      then:")
         lines.append(f"        - logger.log: \"Puppet image downloaded for widget {widget.id}\"")
-        lines.append("        - component.update: epaper_display")
+        lines.append("        - if:")
+        lines.append(f"            condition:")
+        lines.append(f"              lambda: 'return id(display_page) == {pidx};'")
+        lines.append(f"            then:")
+        lines.append(f"              - component.update: epaper_display")
+        lines.append("    on_error:")
+        lines.append("      then:")
+        lines.append(f"        - logger.log: \"Puppet image download FAILED for widget {widget.id}\"")
 
     return "\n".join(lines)
 
 
-def _append_page_render(dst: List[str], page_index: int, page: PageConfig) -> None:
+def _append_page_render(dst: List[str], page_index: int, page: PageConfig, numeric_entity_ids: dict[str, int]) -> None:
     indent = "      "
     dst.append(f'{indent}if (id(display_page) == {page_index}) {{')
     if not page.widgets:
         dst.append(f"{indent}  // Page {page_index}: no widgets configured.")
     else:
         for widget in page.widgets:
-            _append_widget_render(dst, indent + "  ", widget)
+            _append_widget_render(dst, indent + "  ", widget, numeric_entity_ids)
     dst.append(f"{indent}}}")
 
 
@@ -876,15 +909,22 @@ def _resolve_font_by_size(size: int, weight: int = 400) -> str:
     return f"id(font_text_{size}_{weight})"
 
 
-def _wrap_with_condition(dst: List[str], indent: str, widget: WidgetConfig, content_lines: List[str]) -> None:
+def _wrap_with_condition(dst: List[str], indent: str, widget: WidgetConfig, content_lines: List[str], numeric_entity_ids: dict[str, int]) -> None:
     """Wrap widget rendering code with conditional visibility if configured."""
-    has_condition = (
+    # Check for Single Value mode
+    has_single = (
         widget.condition_entity and 
         widget.condition_state is not None and 
         widget.condition_operator
     )
     
-    if not has_condition:
+    # Check for Range mode
+    has_range = (
+        widget.condition_entity and 
+        (widget.condition_min is not None or widget.condition_max is not None)
+    )
+    
+    if not has_single and not has_range:
         # No condition - just append content
         dst.extend(content_lines)
         return
@@ -895,32 +935,71 @@ def _wrap_with_condition(dst: List[str], indent: str, widget: WidgetConfig, cont
     else:
         safe_cond_id = widget.condition_entity
     
-    cond_state = str(widget.condition_state).replace('"', '\\"')
-    cond_op = widget.condition_operator or "=="
+    # Determine if condition entity is numeric
+    is_numeric = widget.condition_entity in numeric_entity_ids
     
-    # Map operators to C++ comparisons
-    if cond_op == "==":
-        # String comparison for equality
-        dst.append(f'{indent}if (id({safe_cond_id}).state == "{cond_state}") {{')
-        dst.extend(content_lines)
-        dst.append(f'{indent}}}')
-    elif cond_op == "!=":
-        dst.append(f'{indent}if (id({safe_cond_id}).state != "{cond_state}") {{')
-        dst.extend(content_lines)
-        dst.append(f'{indent}}}')
-    elif cond_op in (">", "<", ">=", "<="):
-        # Numeric comparison
-        dst.append(f'{indent}{{')
+    dst.append(f'{indent}{{')
+    
+    # Prepare value access
+    if is_numeric:
+        val_expr = f"id({safe_cond_id}).state"
+    else:
+        # For text sensors, we need to parse float for range or numeric ops
         dst.append(f'{indent}  float cond_val = atof(id({safe_cond_id}).state.c_str());')
-        dst.append(f'{indent}  if (cond_val {cond_op} {cond_state}) {{')
-        # Content needs extra indent
-        indented_content = [line.replace(indent, indent + "    ", 1) if line.startswith(indent) else "    " + line for line in content_lines]
-        dst.extend(indented_content)
-        dst.append(f'{indent}  }}')
-        dst.append(f'{indent}}}')
+        val_expr = "cond_val"
+
+    if has_range:
+        # Range Logic (Min/Max)
+        # Default to AND (Inside) if not specified
+        logic = (widget.condition_logic or "and").lower()
+        
+        parts = []
+        if widget.condition_min is not None:
+            parts.append(f"{val_expr} > {widget.condition_min}")
+        if widget.condition_max is not None:
+            parts.append(f"{val_expr} < {widget.condition_max}")
+            
+        if parts:
+            join_op = " && " if logic == "and" else " || "
+            condition = join_op.join(parts)
+            dst.append(f'{indent}  if ({condition}) {{')
+        else:
+            # Should not happen if has_range is true, but fallback
+            dst.append(f'{indent}  if (true) {{')
+            
+    else:
+        # Single Value Logic
+        cond_state = str(widget.condition_state).replace('"', '\\"')
+        cond_op = widget.condition_operator or "=="
+        
+        if cond_op in (">", "<", ">=", "<="):
+            # Numeric comparison
+            if is_numeric:
+                dst.append(f'{indent}  if ({val_expr} {cond_op} {cond_state}) {{')
+            else:
+                # Text sensor uses parsed float
+                dst.append(f'{indent}  if ({val_expr} {cond_op} {cond_state}) {{')
+        else:
+            # Equality/Inequality
+            if is_numeric:
+                # Direct float comparison
+                dst.append(f'{indent}  if ({val_expr} {cond_op} {cond_state}) {{')
+            else:
+                # String comparison for text sensors
+                if cond_op == "==":
+                    dst.append(f'{indent}  if (id({safe_cond_id}).state == "{cond_state}") {{')
+                else:
+                    dst.append(f'{indent}  if (id({safe_cond_id}).state != "{cond_state}") {{')
+
+    # Content needs extra indent
+    indented_content = [line.replace(indent, indent + "    ", 1) if line.startswith(indent) else "    " + line for line in content_lines]
+    dst.extend(indented_content)
+    
+    dst.append(f'{indent}  }}')
+    dst.append(f'{indent}}}')
 
 
-def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> None:
+def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig, numeric_entity_ids: dict[str, int]) -> None:
     """Render a single widget into display lambda C++ code.
 
     Unified styling semantics:
@@ -984,7 +1063,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         # Add marker comment for parser with all properties including font_family and font_weight
         content.append(f'{indent}// widget:text id:{widget.id} type:text x:{x} y:{y} w:{w} h:{h} text:"{text}" font_size:{font_size} font_family:{font_family} font_weight:{font_weight} weight:{font_weight} color:{color_prop} font_style:{font_style}')
         content.append(f'{indent}it.print({x}, {y}, {font}, {fg}, "{text}");')
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # Icon widget (MDI icon from font)
@@ -1022,7 +1101,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         # Add marker comment for parser
         content.append(f'{indent}// widget:icon id:{widget.id} type:icon x:{x} y:{y} w:{w} h:{h} code:{code} size:{size} color:{color_prop}')
         content.append(f'{indent}it.print({x}, {y}, id({font_ref}), {icon_color}, "{escaped_char}");')
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # Sensor text (label + value from HA sensor)
@@ -1045,7 +1124,8 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
             
             # Add marker comment for parser with font sizes and font_family
             is_local = "true" if props.get("is_local_sensor") else "false"
-            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} ent:{entity_id} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family} font_weight:{font_weight} precision:{precision} local:{is_local} color:{base_color}')
+            is_text_sensor = "true" if props.get("is_text_sensor") else "false"
+            content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} ent:{entity_id} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family} font_weight:{font_weight} precision:{precision} local:{is_local} text_sensor:{is_text_sensor} color:{base_color}')
             
             # Determine value expression and format string
             unit = props.get("unit", "")
@@ -1090,7 +1170,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
             content.append(f'{indent}// widget:sensor_text id:{widget.id} type:sensor_text x:{x} y:{y} w:{w} h:{h} title:"{label}" label_font:{label_font_size} value_font:{value_font_size} format:{value_format} font_family:{font_family} font_weight:{font_weight} precision:{precision}')
             content.append(f'{indent}// No entity_id configured for this sensor_text widget')
             content.append(f'{indent}it.printf({x}, {y}, {font}, {fg}, "{placeholder}: N/A");')
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # Date/time widget
@@ -1122,7 +1202,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
             content.append(f'{indent}it.strftime({cx}, {y}, {time_font}, {fg}, TextAlign::TOP_CENTER, "%H:%M", id(ha_time).now());')
             date_y = y + time_font_size + 4
             content.append(f'{indent}it.strftime({cx}, {date_y}, {date_font}, {fg}, TextAlign::TOP_CENTER, "%a, %b %d", id(ha_time).now());')
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # Progress bar widget
@@ -1144,7 +1224,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
             # Also include style properties so they persist
             content.append(f'{indent}// widget:progress_bar id:{widget.id} type:progress_bar x:{x} y:{y} w:{w} h:{h} label:"{label}" bar_height:{bar_height} border:{border_width} show_label:{show_label_str} show_pct:{show_pct_str} color:{base_color} (no entity configured)')
             content.append(f'{indent}it.rectangle({x}, {y}, {w}, {h}, {fg});')
-            _wrap_with_condition(dst, indent, widget, content)
+            _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
             return
         
         # Generate safe ID from entity_id (handle local vs HA)
@@ -1197,7 +1277,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         content.append(f'{indent}    it.filled_rectangle({x}+1, {bar_y}+1, fill_width, {bar_height}-2, {fg});')
         content.append(f'{indent}  }}')
         content.append(f'{indent}}}')
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # Battery icon widget - dynamic icon based on battery level
@@ -1212,7 +1292,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
             # Also include size so it persists
             content.append(f'{indent}// widget:battery_icon id:{widget.id} type:battery_icon x:{x} y:{y} w:{w} h:{h} size:{size} color:{base_color} (no entity configured)')
             content.append(f'{indent}it.printf({x}, {y}, id({font_id}), {fg}, "\\U000F0079");  // battery')
-            _wrap_with_condition(dst, indent, widget, content)
+            _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
             return
         
         # Generate safe ID from entity_id (handle local vs HA)
@@ -1247,7 +1327,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         content.append(f'{indent}  // Show percentage below icon')
         content.append(f'{indent}  it.printf({x}, {y}+{size}+2, id(font_small), {fg}, "%.0f%%", level);')
         content.append(f'{indent}}}')
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # Weather icon widget - dynamic icon based on weather state
@@ -1259,7 +1339,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         if not entity_id:
             content.append(f'{indent}// widget:weather_icon id:{widget.id} type:weather_icon x:{x} y:{y} w:{w} h:{h} size:{size} color:{base_color} (no entity)')
             content.append(f'{indent}it.printf({x}, {y}, id({font_id}), {fg}, "\\U000F0591"); // sunny placeholder')
-            _wrap_with_condition(dst, indent, widget, content)
+            _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
             return
 
         if "." in entity_id:
@@ -1290,7 +1370,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         content.append(f'{indent}  else if (state == "exceptional") icon = "\\U000F0024";')
         content.append(f'{indent}  it.printf({x}, {y}, id({font_id}), {fg}, "%s", icon);')
         content.append(f'{indent}}}')
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # Rectangle / filled rectangle
@@ -1352,7 +1432,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
                     f"{indent}  it.rectangle({x}+i, {y}+i, {w}-2*i, {h}-2*i, {fg});"
                 )
                 content.append(f"{indent}}}")
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
 
@@ -1416,7 +1496,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
                 content.append(f"{indent}for (int i = 0; i < {border_width}; i++) {{")
                 content.append(f"{indent}  it.circle({cx}, {cy}, {r}-i, {fg});")
                 content.append(f"{indent}}}")
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # Line: from (x,y) to (x+width,y+height) using width/height as dx/dy
@@ -1427,7 +1507,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
         # Add marker comment for parser
         content.append(f'{indent}// widget:line id:{widget.id} type:line x:{x} y:{y} w:{w} h:{h} stroke:{stroke_width} color:{base_color}')
         content.append(f"{indent}it.line({x}, {y}, {x}+{dx}, {y}+{dy}, {fg});")
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # Graph widget
@@ -1466,7 +1546,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
                 # Draw title in top-left corner with small font
                 content.append(f'{indent}it.printf({x}+4, {y}+2, id(font_small), {fg}, "{title}");')
 
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # Image widget
@@ -1491,7 +1571,7 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
             content.append(f'{indent}// widget:image id:{widget.id} type:image x:{x} y:{y} w:{w} h:{h} (no path)')
             content.append(f'{indent}it.rectangle({x}, {y}, {w}, {h}, {fg});')
             
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # History widget: placeholder visualization; requires precomputed entity
@@ -1512,7 +1592,25 @@ def _append_widget_render(dst: List[str], indent: str, widget: WidgetConfig) -> 
             content.append(f"{indent}it.line({hx+2}, {hy+hh-3}, {hx+hw-2}, {hy+3}, {fg});")
         else:
             content.append(f"{indent}// draw simple bar-style segments as placeholder")
-        _wrap_with_condition(dst, indent, widget, content)
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
+        return
+
+    # Online Image widget
+    if wtype == "online_image":
+        url = (props.get("url") or "").strip()
+        safe_id = f"img_{widget.id}".replace("-", "_")
+        content.append(f'{indent}// widget:online_image id:{widget.id} type:online_image x:{x} y:{y} w:{w} h:{h} url:"{url}"')
+        content.append(f"{indent}it.image({x}, {y}, id({safe_id}));")
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
+        return
+
+    # Puppet widget (online image wrapper)
+    if wtype == "puppet":
+        url = (props.get("image_url") or "").strip()
+        safe_id = f"img_{widget.id}".replace("-", "_")
+        content.append(f'{indent}// widget:puppet id:{widget.id} type:puppet x:{x} y:{y} w:{w} h:{h} url:"{url}"')
+        content.append(f"{indent}it.image({x}, {y}, id({safe_id}));")
+        _wrap_with_condition(dst, indent, widget, content, numeric_entity_ids)
         return
 
     # Unknown type: emit comment for safety
