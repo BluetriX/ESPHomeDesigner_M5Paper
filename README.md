@@ -1,18 +1,16 @@
 # reTerminal Dashboard Designer
 
-
 **A visual drag-and-drop editor for ESPHome e-paper dashboards, running right inside Home Assistant.**
 
 
 
-[![Watch the video](screenshots/Reterminal_Designer_v05.gif)](https://youtu.be/bzCbiUypN_4)
+![Dashboard Editor Screenshot](https://raw.githubusercontent.com/koosoli/ReTerminalDesigner/main/screenshots/Screenshot4.png)
 
 **No more hand-coding ESPHome display lambdas! 🎉**
 
 Got a Seeed Studio reTerminal E1001 and frustrated with manually writing display code? Yeah, me too. So I built a drag-and-drop editor that runs right inside Home Assistant.
 
 Design your e-ink dashboard visually, click generate, flash it - done. No YAML wrestling required (unless you're into that).
-
 
 ## What Does It Do?
 
