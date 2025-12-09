@@ -227,7 +227,7 @@ class ReTerminalDashboardStaticView(HomeAssistantView):
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>reTerminal Dashboard Designer</title>
+  <title>ESPHome Designer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
 {self._load_base_styles()}
@@ -236,7 +236,7 @@ class ReTerminalDashboardStaticView(HomeAssistantView):
 <body>
   <aside class="sidebar">
     <div>
-      <h1><span class="logo-dot"></span> reTerminal Designer</h1>
+      <h1><span class="logo-dot"></span> ESPHome Designer</h1>
       <div class="pill">
         <span></span>
         <div>Connected to Home Assistant</div>

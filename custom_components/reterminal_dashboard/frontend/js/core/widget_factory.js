@@ -252,7 +252,8 @@ class WidgetFactory {
                     min: 0,
                     max: 100,
                     value: 50,
-                    color: "blue",
+                    color: "black",
+                    title: "Arc",
                     thickness: 10
                 };
                 break;

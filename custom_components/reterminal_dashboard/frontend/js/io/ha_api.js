@@ -90,7 +90,7 @@ async function fetchEntityStates() {
         if (window.AppState) {
             window.AppState.entityStates = {};
             entityStatesCache.forEach(e => {
-                window.AppState.entityStates[e.entity_id] = e.formatted;
+                window.AppState.entityStates[e.entity_id] = e;
             });
             console.log(`[EntityStates] Populated AppState.entityStates with ${Object.keys(window.AppState.entityStates).length} entries`);
         }
@@ -163,7 +163,7 @@ async function loadLayoutFromBackend() {
                 const listData = await listResp.json();
                 console.log(`[loadLayoutFromBackend] Available layouts:`, listData.layouts?.map(l => l.id));
                 console.log(`[loadLayoutFromBackend] Last active layout ID from backend: ${listData.last_active_layout_id}`);
-                
+
                 if (listData.last_active_layout_id) {
                     // Verify the last active layout still exists
                     const exists = listData.layouts?.some(l => l.id === listData.last_active_layout_id);
@@ -174,7 +174,7 @@ async function loadLayoutFromBackend() {
                         console.warn(`[loadLayoutFromBackend] Last active layout '${listData.last_active_layout_id}' no longer exists`);
                     }
                 }
-                
+
                 if (!layoutId && listData.layouts && listData.layouts.length > 0) {
                     // Fallback to first layout
                     layoutId = listData.layouts[0].id;
@@ -192,17 +192,17 @@ async function loadLayoutFromBackend() {
         } else {
             resp = await fetch(`${HA_API_BASE}/layout`);
         }
-        
+
         if (!resp.ok) {
             throw new Error(`Failed to load layout: ${resp.status}`);
         }
         const layout = await resp.json();
-        
+
         // CRITICAL: Ensure device_id is set in the layout before loading
         if (!layout.device_id && layoutId) {
             layout.device_id = layoutId;
         }
-        
+
         console.log(`[loadLayoutFromBackend] Loaded layout '${layout.device_id || layoutId || 'default'}':`, {
             name: layout.name,
             device_model: layout.device_model,
@@ -239,10 +239,10 @@ async function saveLayoutToBackend() {
 
     // Get current layout ID - default to reterminal_e1001 if not set
     const layoutId = window.AppState.currentLayoutId || "reterminal_e1001";
-    
+
     // Get device model - prefer settings (which user can change) over top-level
     const deviceModel = window.AppState.settings.device_model || window.AppState.deviceModel || "reterminal_e1001";
-    
+
     const layoutData = {
         pages: window.AppState.pages,
         ...window.AppState.settings,
@@ -258,7 +258,7 @@ async function saveLayoutToBackend() {
             pages: layoutData.pages?.length,
             widgets: layoutData.pages?.reduce((sum, p) => sum + (p.widgets?.length || 0), 0)
         });
-        
+
         // Use the layouts/{id} endpoint to save to the specific layout
         const resp = await fetch(`${HA_API_BASE}/layouts/${layoutId}`, {
             method: "POST",

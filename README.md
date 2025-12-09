@@ -1,7 +1,6 @@
-# reTerminal Dashboard Designer
+# ESPHome Designer
 
-
-**A visual drag-and-drop editor for ESPHome e-paper dashboards, running right inside Home Assistant.**
+**A visual drag-and-drop editor for ESPHome displays (E-Ink, OLED, LCD, Touch), running right inside Home Assistant.**
 
 
 
@@ -21,7 +20,7 @@ Building a custom smart display for Home Assistant? Frustrated with manually wri
 
 **Meet your new HMI Designer.**
 
-This is a **visual, drag-and-drop interface designer** that lives right inside Home Assistant. It enables you to build premium, touch-interactive dashboards for various ESP32-based e-Paper devices (like the Seeed reTerminal, TRMNL, and more) without writing a single line of display code.
+This is a **visual, drag-and-drop interface designer** that lives right inside Home Assistant. It enables you to build premium, touch-interactive dashboards for various ESP32-based devices (like the Seeed reTerminal, TRMNL, standard touch screens, and more) without writing a single line of display code.
 
 
 ## What Does It Do?
@@ -39,10 +38,10 @@ This is a **visual, drag-and-drop interface designer** that lives right inside H
 
 ### 1. Install via HACS (Recommended)
 
-1. Add this repository to HACS as a custom repository
-2. Search for "reTerminal Dashboard Designer" and install
+1. Add `https://github.com/koosoli/ESPHomeDesigner` to HACS as a custom repository
+2. Search for "ESPHome Designer" and install
 3. Restart Home Assistant
-4. Go to **Settings** → **Devices & Services** → **Add Integration** → Search for "reTerminal Dashboard Designer"
+4. Go to **Settings** → **Devices & Services** → **Add Integration** → Search for "ESPHome Designer"
 
 ### 2. Manual Installation
 

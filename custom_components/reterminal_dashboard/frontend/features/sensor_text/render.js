@@ -22,9 +22,11 @@
         // Helper to format a single value
         const formatValue = (eId) => {
             if (window.AppState && window.AppState.entityStates && eId) {
-                const state = window.AppState.entityStates[eId];
-                if (state !== undefined && state !== null) {
-                    const strState = String(state);
+                const entityObj = window.AppState.entityStates[eId];
+                if (entityObj && entityObj.state !== undefined) {
+                    const strState = entityObj.formatted || String(entityObj.state);
+                    const rawState = entityObj.state;
+
                     const match = strState.match(/^([-+]?\d*\.?\d+)(.*)$/);
                     if (match) {
                         const val = parseFloat(match[1]);
@@ -41,8 +43,8 @@
                         }
                     }
                     // Fallback: update unit from attributes if needed
-                    if (eId === entityId && (unitProp === undefined || unitProp === "") && state.attributes && state.attributes.unit_of_measurement) {
-                        displayUnit = state.attributes.unit_of_measurement;
+                    if (eId === entityId && (unitProp === undefined || unitProp === "") && entityObj.attributes && entityObj.attributes.unit_of_measurement) {
+                        displayUnit = entityObj.attributes.unit_of_measurement;
                     }
                     return strState;
                 }

@@ -3,7 +3,7 @@
         const props = widget.props || {};
         const width = widget.width || 100;
         const height = widget.height || 100;
-        const color = getColorStyle(props.color || "blue");
+        const color = getColorStyle(props.color || "black");
         const thickness = parseInt(props.thickness || 10, 10);
 
         // Clear element
@@ -84,6 +84,23 @@
         }
 
         el.appendChild(svg);
+
+        // Render Title/Label if present
+        if (props.title) {
+            const label = document.createElement("div");
+            label.textContent = props.title;
+            label.style.position = "absolute";
+            label.style.top = "50%";
+            label.style.left = "50%";
+            label.style.transform = "translate(-50%, -50%)";
+            label.style.fontFamily = "Roboto, sans-serif";
+            label.style.fontSize = "14px";
+            label.style.color = color;
+            label.style.pointerEvents = "none";
+            // Ensure container relative positioning
+            el.style.position = "relative";
+            el.appendChild(label);
+        }
     };
 
     // Register with FeatureRegistry

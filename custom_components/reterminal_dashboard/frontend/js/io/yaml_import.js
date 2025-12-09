@@ -423,20 +423,34 @@ function parseSnippetYamlOffline(yamlText) {
                         border_width: parseInt(p.border_width || p.border || 2, 10),
                         radius: parseInt(p.radius || 5, 10)
                     };
+                    if (p.title) widget.title = p.title;
                 } else if (p.type === "lvgl_arc") {
                     widget.props = {
                         min: parseInt(p.min || 0, 10),
                         max: parseInt(p.max || 100, 10),
                         value: parseInt(p.value || 0, 10),
                         thickness: parseInt(p.thickness || 10, 10),
+                        min: parseInt(p.min || 0, 10),
+                        max: parseInt(p.max || 100, 10),
+                        value: parseInt(p.value || 0, 10),
+                        thickness: parseInt(p.thickness || 10, 10),
                         color: p.color || "blue"
                     };
+                    // Ensure title is captured for Arc
+                    if (p.title) {
+                        widget.title = p.title;
+                        widget.props.title = p.title;
+                    }
                 } else if (p.type.startsWith("lvgl_")) {
                     // Generic fallback for other LVGL widgets
                     // Copy all props from p to widget.props, converting "true"/"false" strings
                     widget.props = {};
                     Object.entries(p).forEach(([key, val]) => {
-                        if (key === "id" || key === "type" || key === "x" || key === "y" || key === "w" || key === "h" || key === "title") return;
+                        if (key === "id" || key === "type" || key === "x" || key === "y" || key === "w" || key === "h") return;
+                        if (key === "title") {
+                            widget.title = val;
+                            return;
+                        }
                         if (val === "true") widget.props[key] = true;
                         else if (val === "false") widget.props[key] = false;
                         else widget.props[key] = val;

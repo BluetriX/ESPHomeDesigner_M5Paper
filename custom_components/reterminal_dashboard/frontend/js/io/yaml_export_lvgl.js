@@ -235,7 +235,16 @@ function transpileToLVGL(w) {
                     arc_color: convertColor(p.color),
                     indicator: {
                         arc_color: convertColor(p.color) // Active part color
-                    }
+                    },
+                    widgets: [
+                        {
+                            label: {
+                                align: "CENTER",
+                                text: `"${p.title || ''}"`,
+                                text_color: convertColor(p.color)
+                            }
+                        }
+                    ]
                 }
             };
 

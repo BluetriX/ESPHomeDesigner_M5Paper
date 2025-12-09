@@ -6,6 +6,11 @@
 
 **Release Date:** December 9, 2025
 
+### 🚀 Rebranding & Scope Expansion
+- **Project Renamed to ESPHome Designer**: Refleting our broader mission to support all display types.
+- **Support for More Displays**: We are moving beyond just e-ink to support OLED, LCD, and Touch displays.
+- **New Repository**: `https://github.com/koosoli/ESPHomeDesigner`
+
 ### 🎉 New Features
 - **Experimental LVGL Widgets**: Added experimental support for LVGL `button` and `arc` widgets.
 - **Text Sensor Enhancements**:

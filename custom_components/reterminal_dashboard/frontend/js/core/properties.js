@@ -688,6 +688,12 @@ class PropertiesPanel {
                 AppState.updateWidget(widget.id, { entity_id: v });
             }, widget);
             this.addHint("Sensor to bind to arc value");
+
+            this.addLabeledInput("Title / Label", "text", props.title || "", (v) => {
+                const newProps = { ...widget.props, title: v };
+                AppState.updateWidget(widget.id, { props: newProps });
+            });
+
             this.addLabeledInput("Min Value", "number", props.min || 0, (v) => updateProp("min", parseInt(v, 10)));
             this.addLabeledInput("Max Value", "number", props.max || 100, (v) => updateProp("max", parseInt(v, 10)));
             this.addLabeledInput("Default/Preview Value", "number", props.value || 0, (v) => updateProp("value", parseInt(v, 10)));
