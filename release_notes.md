@@ -12,7 +12,7 @@
 - **New Repository**: `https://github.com/koosoli/ESPHomeDesigner`
 
 ### 🎉 New Features
-- **Experimental LVGL Widgets**: Added experimental support for LVGL `button` and `arc` widgets.
+- **Experimental LVGL Widgets**: Added experimental support for LVGL `button`, `arc`, `chart` (Line/Bar), `slider`, `bar`, `image`, and `qrcode` widgets.
 - **Text Sensor Enhancements**:
   - **Dual Sensor Support**: Now supports displaying two sensors in one widget.
   - **Prefix & Suffix**: Added settings for custom prefix and suffix text.
