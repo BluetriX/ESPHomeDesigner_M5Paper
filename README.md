@@ -18,9 +18,9 @@
 
 Building a custom smart display for Home Assistant? Frustrated with manually writing C++ lambdas and guessing coordinates?
 
-**Meet your new HMI Designer.**
+Design ESPHome displays right inside Home Assistant. This HACS integration offers a drag-and-drop editor with direct access to your sensor library via an intuitive entity picker.
 
-This is a **visual, drag-and-drop interface designer** that lives right inside Home Assistant. It enables you to build premium, touch-interactive dashboards for various ESP32-based devices (like the Seeed reTerminal, TRMNL, standard touch screens, and more) without writing a single line of display code.
+It enables you to build premium, touch-interactive dashboards for various ESP32-based devices (like the Seeed reTerminal, TRMNL, standard touch screens, and more) without writing a single line of display code.
 
 
 ## What Does It Do?
@@ -103,8 +103,10 @@ We expose everything (buttons, sensors, battery) back to Home Assistant. Does a 
 
 - **Text** - Static labels and headers
   - Customizable font size (8-260px) - generates fonts automatically
-  - Color options: black, white, gray
+  - Color options: black, white, **gray** (renders as dithered pattern)
 - **Sensor Text** - Live values from Home Assistant entities
+  - **Smart Type Detection**: Automatically detects number vs string functionality
+  - **Manual Override**: "Is Text Sensor" option for forced text handling
   - Separate font sizes for label and value
   - Multiple display formats (value only, label + value, stacked)
 - **Icon** - Material Design Icons with customizable size and color
@@ -187,7 +189,7 @@ When a page switches to LVGL mode:
 - **Page Management** - Drag & drop to reorder pages in the sidebar
 - **Productivity Tools** - Copy/Paste (Ctrl+C/V), Undo/Redo (Ctrl+Z/Y), and Z-Index layering support
 - **Canvas Controls** - Zoom in/out and recenter for precise editing
-- **Light/Dark Mode** - Choose your preferred theme
+- **Dark Mode Option** - Toggle "Dark Mode" in device settings for black backgrounds
 - **Hardware Integration** - Buttons, buzzer, temperature/humidity sensors exposed to HA
 - **Smart Generator** - Produces clean, additive YAML that doesn't conflict with your base config
 - **Template-Free Workflow** - No more manual template merging, just paste and go
@@ -226,7 +228,9 @@ The workflow is safe and deterministic - same layout always produces the same YA
 **Currently Supported:**
 - Seeed Studio reTerminal E1001 (ESP32-S3, 800x480 e-paper, black/white)
 - Seeed Studio reTerminal E1002 (ESP32-S3, 800x480 e-paper, color)
+- Waveshare PhotoPainter (ESP32-S3, 7-Color e-paper)
 - TRMNL (ESP32-C3 e-paper device)
+- *More coming soon!* (Experimental devices marked as "untested" in editor)
 
 **Hardware Features Exposed:**
 - 3 physical buttons (GPIO 3/4/5)
@@ -258,8 +262,8 @@ All exposed as Home Assistant entities for use in automations.
 
 
 **Duplicate section errors?**
-- Only paste `globals`, `font`, `text_sensor`, `button`, `script`, `display` from generated snippet
-- Don't copy `output`, `rtttl`, `sensor`, `time` - these are in the hardware template
+- The generator now produces a complete, standalone configuration including `psram`, `i2c`, etc.
+- **Do not** use old hardware templates that define these sections. Rely on the generated code.
 
 **Compilation Fails ("Killed signal" / Out of Memory)?**
 If your Raspberry Pi crashes with `Killed signal terminated program`, it lacks the RAM for these fonts.

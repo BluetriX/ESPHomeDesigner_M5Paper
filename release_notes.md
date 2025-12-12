@@ -6,12 +6,21 @@
 
 **Release Date:** December 9, 2025
 
+### 🔧 Architecture Changes
+- **Decoupled Hardware Profile**: Hardware definition logic has been moved out of `yaml_export.js` into dedicated `hardware_generators.js` and `devices.js` files, significantly improving code maintainability and safety.
+
 ### 🚀 Rebranding & Scope Expansion
 - **Project Renamed to ESPHome Designer**: Refleting our broader mission to support all display types.
 - **Support for More Displays**: We are moving beyond just e-ink to support OLED, LCD, and Touch displays.
 - **New Repository**: `https://github.com/koosoli/ESPHomeDesigner`
 
 ### 🎉 New Features
+- **Dark Mode Option**: Added a toggle in Device Settings to enable "Dark Mode" (black background with white widgets).
+- **Gray Color Support**: Full support for "Gray" color has been implemented for icons, text, and all other widgets.
+- **Sensor Text Intelligence**:
+  - **Smart Detection**: New logic automatically detects if a sensor state is a string or a number.
+  - **Manual Override**: Added "Is Text Sensor" checkbox to force text handling if auto-detection fails.
+
 - **Experimental LVGL Widgets**: Added experimental support for LVGL `button`, `arc`, `chart` (Line/Bar), `slider`, `bar`, `image`, and `qrcode` widgets.
 - **Text Sensor Enhancements**:
   - **Dual Sensor Support**: Now supports displaying two sensors in one widget.
@@ -19,6 +28,7 @@
 - **Time & Date Widget**: Added more formatting options for date display.
 
 #### Calendar Widget
+- **Rendering Improvements**: Significant improvements to calendar widget rendering and reliability.
 - **Full-Featured Calendar**: Monthly view with upcoming events list
 - **Customizable**: Configurable font sizes for all elements (Date, Day, Grid, Events), plus colors and border settings
 - **Smart Setup**: Built-in Python helper script downloader simplifies Home Assistant integration
@@ -26,6 +36,7 @@
 
 ### 📱 New Hardware Support
 - **Waveshare PhotoPainter (ESP32-S3)**: Full support for the Waveshare ESP32-S3 PhotoPainter (7-Color E-Ink).
+- **Experimental Support**: Added support for more devices. Note that devices not yet fully verified are explicitly marked as "untested" in the device selector.
 
 
 ### 🐛 Bug Fixes
