@@ -864,7 +864,7 @@ function generateSnippetLocally() {
                 return "";
             };
 
-            const RECT_Y_OFFSET = 0;
+            const RECT_Y_OFFSET = -15;
             const TEXT_Y_OFFSET = 0;
 
             lines.push("      const auto COLOR_WHITE = Color(255, 255, 255, 0);"); // Transparent white? Or standard. E-paper logic.
@@ -1708,6 +1708,7 @@ function generateSnippetLocally() {
                             const colorProp = p.color || "black";
                             const color = getColorConst(colorProp);
                             const isGray = colorProp.toLowerCase() === "gray";
+                            const rrectY = w.y + RECT_Y_OFFSET;
                             lines.push(`        // widget:rounded_rect id:${w.id} type:rounded_rect x:${w.x} y:${w.y} w:${w.width} h:${w.height} fill:${fill} show_border:${showBorder} border:${thickness} radius:${r} color:${colorProp} ${getCondProps(w)}`);
                             lines.push(`        {`);
                             lines.push(`          auto draw_rrect = [&](int x, int y, int w, int h, int r, auto c) {`);
@@ -1721,9 +1722,9 @@ function generateSnippetLocally() {
                             lines.push(`          };`);
 
                             if (fill) {
-                                let fx = w.x, fy = w.y, fw = w.width, fh = w.height, fr = r;
+                                let fx = w.x, fy = rrectY, fw = w.width, fh = w.height, fr = r;
                                 if (showBorder) {
-                                    lines.push(`          draw_rrect(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${r}, ${color});`);
+                                    lines.push(`          draw_rrect(${w.x}, ${rrectY}, ${w.width}, ${w.height}, ${r}, ${color});`);
                                     fx += thickness; fy += thickness; fw -= 2 * thickness; fh -= 2 * thickness; fr -= thickness;
                                     if (fr < 0) fr = 0;
                                 }
@@ -1740,13 +1741,13 @@ function generateSnippetLocally() {
                                     if (fw > 0 && fh > 0) lines.push(`          draw_rrect(${fx}, ${fy}, ${fw}, ${fh}, ${fr}, ${color});`);
                                 }
                             } else {
-                                lines.push(`          draw_rrect(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${r}, ${color});`);
+                                lines.push(`          draw_rrect(${w.x}, ${rrectY}, ${w.width}, ${w.height}, ${r}, ${color});`);
                                 // Erase center
                                 let t = thickness;
                                 let ir = r - t; if (ir < 0) ir = 0;
                                 // Need BG color for erase. Assuming white/black inverse of color?
                                 // Backup used specific bg.
-                                lines.push(`          draw_rrect(${w.x + t}, ${w.y + t}, ${w.width - 2 * t}, ${w.height - 2 * t}, ${ir}, COLOR_OFF);`);
+                                lines.push(`          draw_rrect(${w.x + t}, ${rrectY + t}, ${w.width - 2 * t}, ${w.height - 2 * t}, ${ir}, COLOR_OFF);`);
                             }
                             lines.push(`        }`);
 
@@ -1756,22 +1757,23 @@ function generateSnippetLocally() {
                             const colorProp = p.color || "black";
                             const color = getColorConst(colorProp);
                             const isGray = colorProp.toLowerCase() === "gray";
+                            const rectY = w.y + RECT_Y_OFFSET;
                             lines.push(`        // widget:shape_rect id:${w.id} type:shape_rect x:${w.x} y:${w.y} w:${w.width} h:${w.height} fill:${fill} border:${borderWidth} color:${colorProp} ${getCondProps(w)}`);
                             if (fill) {
                                 if (isGray) {
-                                    lines.push(`        apply_grey_dither_mask(${w.x}, ${w.y}, ${w.width}, ${w.height});`);
+                                    lines.push(`        apply_grey_dither_mask(${w.x}, ${rectY}, ${w.width}, ${w.height});`);
                                 } else {
-                                    lines.push(`        it.filled_rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
+                                    lines.push(`        it.filled_rectangle(${w.x}, ${rectY}, ${w.width}, ${w.height}, ${color});`);
                                 }
                             } else {
                                 for (let i = 0; i < borderWidth; i++)
-                                    lines.push(`        it.rectangle(${w.x}+${i}, ${w.y}+${i}, ${w.width}-2*${i}, ${w.height}-2*${i}, ${color});`);
+                                    lines.push(`        it.rectangle(${w.x}+${i}, ${rectY}+${i}, ${w.width}-2*${i}, ${w.height}-2*${i}, ${color});`);
                             }
 
                         } else if (t === "shape_circle") {
                             const r = Math.min(w.width, w.height) / 2;
                             const cx = w.x + w.width / 2;
-                            const cy = w.y + w.height / 2;
+                            const cy = w.y + w.height / 2 + RECT_Y_OFFSET;
                             const fill = !!p.fill;
                             const borderWidth = parseInt(p.border_width || 1, 10);
                             const colorProp = p.color || "black";
@@ -1781,7 +1783,8 @@ function generateSnippetLocally() {
                             if (fill) {
                                 if (isGray) {
                                     // circle dither
-                                    lines.push(`        it.filled_circle(${cx}, ${cy}, ${r}, ${color}); apply_grey_dither_mask(${w.x}, ${w.y}, ${w.width}, ${w.height});`);
+                                    const circleY = w.y + RECT_Y_OFFSET;
+                                    lines.push(`        it.filled_circle(${cx}, ${cy}, ${r}, ${color}); apply_grey_dither_mask(${w.x}, ${circleY}, ${w.width}, ${w.height});`);
                                 } else {
                                     lines.push(`        it.filled_circle(${cx}, ${cy}, ${r}, ${color});`);
                                 }
