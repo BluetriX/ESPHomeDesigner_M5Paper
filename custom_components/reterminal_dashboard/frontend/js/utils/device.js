@@ -24,14 +24,15 @@ function getDeviceDisplayName(model) {
 }
 
 /**
- * Gets the native resolution for a device model.
+ * Gets the native resolution for a device model in landscape orientation.
  * @param {string} model - Device model identifier
- * @returns {{width: number, height: number}} Resolution object
+ * @returns {{width: number, height: number}} Resolution object (landscape)
  */
 function getDeviceResolution(model) {
     switch (model) {
         case "m5_paper":
-            return { width: 540, height: 960 };
+            // M5 Paper is natively portrait (540×960), so landscape is rotated
+            return { width: 960, height: 540 };
         case "reterminal_e1002":
         case "trmnl":
         case "reterminal_e1001":

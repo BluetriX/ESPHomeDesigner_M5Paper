@@ -32,7 +32,7 @@ class EditorSettings {
         if (this.canvasSizeLabel) {
             const orientation = settings.orientation === 'portrait' ? 'Portrait' : 'Landscape';
             const dims = AppState.getCanvasDimensions();
-            const deviceModel = settings.deviceModel || "reterminal_e1001";
+            const deviceModel = settings.device_model || AppState.deviceModel || "reterminal_e1001";
             const deviceName = getDeviceDisplayName(deviceModel);
             this.canvasSizeLabel.textContent = `${dims.width} x ${dims.height} px · ${deviceName} (${orientation})`;
         }

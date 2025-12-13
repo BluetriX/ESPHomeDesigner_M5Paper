@@ -89,12 +89,12 @@ const DEVICE_PROFILES = {
                 i2c: { sda: "GPIO21", scl: "GPIO22" },
                 spi: { clk: "GPIO14", mosi: "GPIO12" },
                 batteryEnable: null,
-                batteryAdc: "GPIO5",
+                batteryAdc: "GPIO35",
                 buzzer: null,
                 buttons: { left: "GPIO39", right: "GPIO37", refresh: null }
             },
             battery: {
-                attenuation: "12db",
+                attenuation: "11db",
                 multiplier: 2.0,
                 calibration: { min: 3.27, max: 4.15 }
             },
@@ -712,7 +712,7 @@ function generateSnippetLocally() {
         lines.push("#         - Buzzer: None");
     } else if (headerDeviceModel === "m5_paper") {
         lines.push("#         - Display: 4.7\" e-Paper (540x960, Monochrome)");
-        lines.push("#         - Battery: Yes (LiPo with ADC on GPIO5)");
+        lines.push("#         - Battery: Yes (LiPo with ADC on GPIO35)");
         lines.push("#         - Buttons: Yes");
         lines.push("#         - Buzzer: None");
     } else {
@@ -1554,6 +1554,20 @@ function generateSnippetLocally() {
         lines.push("    busy_pin:");
         lines.push("      number: GPIO4");
         lines.push("      inverted: true");
+        lines.push("    update_interval: never");
+    } else if (deviceModel === "m5_paper") {
+        // M5 Paper (ESP32-D0WDQ6-V3) with IT8951 controller
+        lines.push("  # Device: M5 Paper (ESP32-D0WDQ6-V3)");
+        lines.push("  - platform: it8951e");
+        lines.push("    id: epaper_display");
+        lines.push("    cs_pin: GPIO15");
+        lines.push("    reset_pin: GPIO23");
+        lines.push("    reset_duration: 100ms");
+        lines.push("    busy_pin: GPIO27");
+        // M5 Paper native is portrait, so landscape = 270°, portrait = 0° (or 180°)
+        const m5Rotation = (payload.orientation === "portrait") ? "0" : "270";
+        lines.push(`    rotation: ${m5Rotation}`);
+        lines.push("    reversed: false");
         lines.push("    update_interval: never");
     } else {
         // Default / E1001 configuration (Waveshare)
