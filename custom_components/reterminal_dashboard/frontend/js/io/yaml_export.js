@@ -1,8 +1,9 @@
 // ============================================================================
-// DEVICE HARDWARE PROFILES
+// DEVICE HARDWARE PROFILES - VERSION 2.0 WITH M5 PAPER SUPPORT
 // ============================================================================
 // Complete hardware configuration for each supported device.
 // Used to generate all hardware-related YAML sections (sensors, buttons, etc.)
+// UPDATED: Added M5 Paper (ESP32-D0WDQ6-V3) support with IT8951E display
 // ============================================================================
 
 const DEVICE_PROFILES = {
