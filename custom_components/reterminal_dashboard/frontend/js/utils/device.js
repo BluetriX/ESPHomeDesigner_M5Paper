@@ -49,8 +49,11 @@ function getAvailableColors() {
     const model = getDeviceModel();
     if (model === "reterminal_e1002") {
         return ["black", "white", "gray", "red", "green", "blue", "yellow"];
+    } else if (model === "m5_paper") {
+        // M5 Paper with IT8951E supports 16 grayscale levels
+        return ["black", "darkgray", "gray", "lightgray", "white"];
     }
-    // Default E1001, M5Paper and TRMNL (True Monochrome)
+    // Default E1001 and TRMNL (Binary with dithered gray)
     return ["black", "white", "gray"];
 }
 
@@ -62,12 +65,14 @@ function getAvailableColors() {
 function getColorStyle(colorName) {
     switch ((colorName || "").toLowerCase()) {
         case "white": return "#ffffff";
+        case "lightgray": return "#c0c0c0"; // ~75% brightness
+        case "gray": return "#808080"; // 50% brightness
+        case "darkgray": return "#404040"; // ~25% brightness
         case "red": return "#ff0000";
         case "green": return "#00ff00";
         case "blue": return "#0000ff";
         case "yellow": return "#ffff00";
         case "orange": return "#ffa500";
-        case "gray": return "#aaaaaa"; // Keep for backward compatibility/preview
         case "black":
         default: return "#000000";
     }

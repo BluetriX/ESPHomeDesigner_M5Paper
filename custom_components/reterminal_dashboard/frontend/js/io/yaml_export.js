@@ -87,7 +87,7 @@ const DEVICE_PROFILES = {
             pins: {
                 display: { cs: "GPIO15", dc: null, reset: "GPIO23", busy: "GPIO27" },
                 i2c: { sda: "GPIO21", scl: "GPIO22" },
-                spi: { clk: "GPIO14", mosi: "GPIO12" },
+                spi: { clk: "GPIO14", mosi: "GPIO12", miso: "GPIO13" },
                 batteryEnable: null,
                 batteryAdc: "GPIO35",
                 buzzer: null,
@@ -186,19 +186,36 @@ function generateI2CSection(profile) {
  * Generates SPI section
  */
 function generateSPISection(profile) {
-    return [
+    const lines = [
         "spi:",
         `  clk_pin: ${profile.pins.spi.clk}`,
-        `  mosi_pin: ${profile.pins.spi.mosi}`,
-        ""
+        `  mosi_pin: ${profile.pins.spi.mosi}`
     ];
+
+    // Add MISO pin if defined (needed for IT8951E displays like M5 Paper)
+    if (profile.pins.spi.miso) {
+        lines.push(`  miso_pin: ${profile.pins.spi.miso}`);
+    }
+
+    lines.push("");
+    return lines;
 }
 
 /**
- * Generates PSRAM section for ESP32-S3 devices
+ * Generates PSRAM section for ESP32-S3 and M5 Paper devices
  */
-function generatePSRAMSection(profile) {
+function generatePSRAMSection(profile, deviceModel) {
     if (!profile.features.psram) return [];
+
+    // M5 Paper uses simple PSRAM config (auto-detected by ESPHome)
+    if (deviceModel === "m5_paper") {
+        return [
+            "psram:",
+            ""
+        ];
+    }
+
+    // ESP32-S3 devices (reTerminal E1001/E1002) need explicit config
     return [
         "psram:",
         "  mode: octal",
@@ -1193,8 +1210,8 @@ function generateSnippetLocally() {
     // Generate globals section (required for navigation, refresh, and quote storage)
     lines.push(...generateGlobalsSection(900, quoteRssWidgetsEarly));
 
-    // Generate PSRAM section (ESP32-S3 devices only)
-    lines.push(...generatePSRAMSection(profile));
+    // Generate PSRAM section (ESP32-S3 and M5 Paper devices)
+    lines.push(...generatePSRAMSection(profile, deviceModel));
 
     // Generate http_request section (required for online images and quote fetching)
     lines.push("http_request:");
@@ -1596,8 +1613,15 @@ function generateSnippetLocally() {
         lines.push("      const auto COLOR_GREEN = Color(0, 255, 0, 0);");
         lines.push("      const auto COLOR_BLUE = Color(0, 0, 255, 0);");
         lines.push("      const auto COLOR_YELLOW = Color(255, 255, 0, 0);");
+    } else if (getDeviceModel() === "m5_paper") {
+        // M5 Paper with IT8951E supports true grayscale (16 levels)
+        lines.push("      const auto COLOR_ON = Color(0, 0, 0);         // Black");
+        lines.push("      const auto COLOR_OFF = Color(255, 255, 255);   // White");
+        lines.push("      const auto COLOR_DARKGRAY = Color(64, 64, 64);   // ~25% brightness");
+        lines.push("      const auto COLOR_GRAY = Color(128, 128, 128);    // 50% brightness");
+        lines.push("      const auto COLOR_LIGHTGRAY = Color(192, 192, 192); // ~75% brightness");
     } else {
-        // E1001 is a binary display - use 0/1
+        // E1001/TRMNL is a binary display - use 0/1
         lines.push("      Color COLOR_ON = Color(1);");
         lines.push("      Color COLOR_OFF = Color(0);");
     }
@@ -1626,7 +1650,8 @@ function generateSnippetLocally() {
 
             // Helper to map color names to ESPHome color constants
             // For E1002 (color display): supports black, white, red, green, blue, yellow
-            // For E1001 (B&W display): only COLOR_ON and COLOR_OFF
+            // For M5 Paper (grayscale): supports black, darkgray, gray, lightgray, white
+            // For E1001/TRMNL (B&W display): only COLOR_ON and COLOR_OFF
             const getColorConst = (colorProp) => {
                 const c = (colorProp || "black").toLowerCase();
                 if (c === "white") return "COLOR_OFF";
@@ -1635,8 +1660,12 @@ function generateSnippetLocally() {
                     if (c === "green") return "COLOR_GREEN";
                     if (c === "blue") return "COLOR_BLUE";
                     if (c === "yellow") return "COLOR_YELLOW";
+                } else if (getDeviceModel() === "m5_paper") {
+                    if (c === "lightgray") return "COLOR_LIGHTGRAY";
+                    if (c === "gray") return "COLOR_GRAY";
+                    if (c === "darkgray") return "COLOR_DARKGRAY";
                 }
-                return "COLOR_ON"; // black, gray, or any other falls back to black
+                return "COLOR_ON"; // black or any other falls back to black
             };
 
             for (const w of page.widgets) {
