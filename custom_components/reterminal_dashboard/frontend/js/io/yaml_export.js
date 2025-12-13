@@ -344,6 +344,15 @@ function generateSensorSection(profile, widgetSensorLines = []) {
 }
 
 /**
+ * Helper: Check if GPIO supports pull-up resistors
+ * ESP32 GPIO34-39 are input-only and don't support pull-ups
+ */
+function supportsPullup(gpio) {
+    const gpioNum = parseInt(gpio.replace(/[^\d]/g, ''));
+    return gpioNum < 34 || gpioNum > 39;
+}
+
+/**
  * Generates binary_sensor section for buttons
  */
 function generateBinarySensorSection(profile, numPages = 5) {
@@ -358,7 +367,9 @@ function generateBinarySensorSection(profile, numPages = 5) {
     lines.push("    name: \"reTerminal Button Left\"");
     lines.push("    pin:");
     lines.push(`      number: ${profile.pins.buttons.left}`);
-    lines.push("      mode: INPUT_PULLUP");
+    if (supportsPullup(profile.pins.buttons.left)) {
+        lines.push("      mode: INPUT_PULLUP");
+    }
     lines.push("      inverted: true");
     lines.push("    on_press:");
     lines.push("      then:");
@@ -375,7 +386,9 @@ function generateBinarySensorSection(profile, numPages = 5) {
     lines.push("    name: \"reTerminal Button Right\"");
     lines.push("    pin:");
     lines.push(`      number: ${profile.pins.buttons.right}`);
-    lines.push("      mode: INPUT_PULLUP");
+    if (supportsPullup(profile.pins.buttons.right)) {
+        lines.push("      mode: INPUT_PULLUP");
+    }
     lines.push("      inverted: true");
     lines.push("    on_press:");
     lines.push("      then:");
@@ -386,18 +399,22 @@ function generateBinarySensorSection(profile, numPages = 5) {
     lines.push("        - component.update: epaper_display");
     lines.push("");
 
-    // Refresh button
-    lines.push("  - platform: gpio");
-    lines.push("    id: button_refresh");
-    lines.push("    name: \"reTerminal Button Refresh\"");
-    lines.push("    pin:");
-    lines.push(`      number: ${profile.pins.buttons.refresh}`);
-    lines.push("      mode: INPUT_PULLUP");
-    lines.push("      inverted: true");
-    lines.push("    on_press:");
-    lines.push("      then:");
-    lines.push("        - component.update: epaper_display");
-    lines.push("");
+    // Refresh button (only if defined)
+    if (profile.pins.buttons.refresh) {
+        lines.push("  - platform: gpio");
+        lines.push("    id: button_refresh");
+        lines.push("    name: \"reTerminal Button Refresh\"");
+        lines.push("    pin:");
+        lines.push(`      number: ${profile.pins.buttons.refresh}`);
+        if (supportsPullup(profile.pins.buttons.refresh)) {
+            lines.push("      mode: INPUT_PULLUP");
+        }
+        lines.push("      inverted: true");
+        lines.push("    on_press:");
+        lines.push("      then:");
+        lines.push("        - component.update: epaper_display");
+        lines.push("");
+    }
 
     return lines;
 }
@@ -1205,14 +1222,7 @@ function generateSnippetLocally() {
     // ========================================================================
 
     const deviceModel = payload.device_model || getDeviceModel();
-    console.log("[YAML Export] Device Model:", deviceModel);
-    console.log("[YAML Export] Payload:", payload);
-    console.log("[YAML Export] Available profiles:", Object.keys(DEVICE_PROFILES));
-    console.log("[YAML Export] Profile lookup result:", DEVICE_PROFILES[deviceModel]);
-    console.log("[YAML Export] Profile loaded:", DEVICE_PROFILES[deviceModel]?.name || "FALLBACK TO E1001");
     const profile = DEVICE_PROFILES[deviceModel] || DEVICE_PROFILES.reterminal_e1001;
-    console.log("[YAML Export] Final profile pins.spi:", profile.pins.spi);
-    console.log("[YAML Export] Final profile pins.i2c:", profile.pins.i2c);
     const numPages = pagesLocal.length || 5;
 
     // Generate globals section (required for navigation, refresh, and quote storage)
