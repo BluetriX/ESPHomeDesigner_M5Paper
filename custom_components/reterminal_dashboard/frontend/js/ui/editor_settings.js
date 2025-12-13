@@ -31,8 +31,10 @@ class EditorSettings {
         // Update Canvas Size Label
         if (this.canvasSizeLabel) {
             const orientation = settings.orientation === 'portrait' ? 'Portrait' : 'Landscape';
-            const dims = settings.orientation === 'portrait' ? '480 x 800' : '800 x 480';
-            this.canvasSizeLabel.textContent = `${dims} px · reTerminal E-Ink (${orientation})`;
+            const dims = AppState.getCanvasDimensions();
+            const deviceModel = settings.deviceModel || "reterminal_e1001";
+            const deviceName = getDeviceDisplayName(deviceModel);
+            this.canvasSizeLabel.textContent = `${dims.width} x ${dims.height} px · ${deviceName} (${orientation})`;
         }
 
         // Snap to Grid

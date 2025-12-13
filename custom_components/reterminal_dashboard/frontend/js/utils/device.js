@@ -15,10 +15,28 @@ function getDeviceModel() {
  */
 function getDeviceDisplayName(model) {
     switch (model) {
+        case "m5_paper": return "M5 Paper (ESP32-D0WDQ6-V3)";
         case "reterminal_e1002": return "reTerminal E1002 (6-Color)";
         case "trmnl": return "Official TRMNL (ESP32-C3)";
         case "reterminal_e1001":
         default: return "reTerminal E1001 (Monochrome)";
+    }
+}
+
+/**
+ * Gets the native resolution for a device model.
+ * @param {string} model - Device model identifier
+ * @returns {{width: number, height: number}} Resolution object
+ */
+function getDeviceResolution(model) {
+    switch (model) {
+        case "m5_paper":
+            return { width: 540, height: 960 };
+        case "reterminal_e1002":
+        case "trmnl":
+        case "reterminal_e1001":
+        default:
+            return { width: 800, height: 480 };
     }
 }
 
@@ -31,7 +49,7 @@ function getAvailableColors() {
     if (model === "reterminal_e1002") {
         return ["black", "white", "gray", "red", "green", "blue", "yellow"];
     }
-    // Default E1001 and TRMNL (True Monochrome)
+    // Default E1001, M5Paper and TRMNL (True Monochrome)
     return ["black", "white", "gray"];
 }
 

@@ -79,6 +79,31 @@ const DEVICE_PROFILES = {
             buzzer: false,
             buttons: false,
             sht4x: false
+        },
+        m5_paper: {
+            name: "m5Paper (ESP32-D0WDQ6-V3)",
+            displayModel: "4.7in",
+            displayPlatform: "it8951e",
+            pins: {
+                display: { cs: "GPIO15", dc: null, reset: "GPIO23", busy: "GPIO27" },
+                i2c: { sda: "GPIO21", scl: "GPIO22" },
+                spi: { clk: "GPIO14", mosi: "GPIO12" },
+                batteryEnable: null,
+                batteryAdc: "GPIO5",
+                buzzer: null,
+                buttons: { left: "GPIO39", right: "GPIO37", refresh: null }
+            },
+            battery: {
+                attenuation: "12db",
+                multiplier: 2.0,
+                calibration: { min: 3.27, max: 4.15 }
+            },
+            features: {
+                psram: true,
+                buzzer: false,
+                buttons: true,
+                sht4x: false
+            }
         }
     }
 };
@@ -663,6 +688,8 @@ function generateSnippetLocally() {
         deviceDisplayName = "reTerminal E1002 (6-Color)";
     } else if (headerDeviceModel === "trmnl") {
         deviceDisplayName = "Official TRMNL (ESP32-C3)";
+    } else if (headerDeviceModel === "m5_paper") {
+        deviceDisplayName = "M5Paper (ESP32-D0WDQ6-V3)";
     }
 
     lines.push("# ============================================================================");
@@ -683,6 +710,11 @@ function generateSnippetLocally() {
         lines.push("#         - Battery: Yes (LiPo with ADC on GPIO0)");
         lines.push("#         - Buttons: None");
         lines.push("#         - Buzzer: None");
+    } else if (headerDeviceModel === "m5_paper") {
+        lines.push("#         - Display: 4.7\" e-Paper (540x960, Monochrome)");
+        lines.push("#         - Battery: Yes (LiPo with ADC on GPIO5)");
+        lines.push("#         - Buttons: Yes");
+        lines.push("#         - Buzzer: None");
     } else {
         lines.push("#         - Display: 7.5\" Waveshare e-Paper (800x480, Monochrome)");
         lines.push("#         - Battery: Yes (LiPo with ADC on GPIO1)");
@@ -702,7 +734,7 @@ function generateSnippetLocally() {
     lines.push("# STEP 2: Create a new device in ESPHome");
     lines.push("#         - Click \"New Device\"");
     lines.push("#         - Name: reterminal (or your choice)");
-    if (headerDeviceModel === "trmnl") {
+    if (headerDeviceModel === "trmnl" || headerDeviceModel === "m5_paper") {
         lines.push("#         - Select: ESP32-C3");
     } else {
         lines.push("#         - Select: ESP32-S3");
@@ -710,19 +742,47 @@ function generateSnippetLocally() {
     lines.push("#         - ESPHome will auto-generate a basic config");
     lines.push("#");
     lines.push("# STEP 3: Add this on_boot section to your esphome: section:");
-    lines.push("#");
+    lines.push("#");    
     lines.push("#         esphome:");
     lines.push("#           name: your-device-name");
     lines.push("#           compile_process_limit: 1");
     lines.push("#           on_boot:");
-    lines.push("#             priority: 600");
-    lines.push("#             then:");
+    lines.push("#             - priority: 600");
+    lines.push("#               then:");
     if (headerDeviceModel !== "trmnl") {
         lines.push("#               - output.turn_on: bsp_battery_enable");
     }
     lines.push("#               - delay: 2s");
     lines.push("#               - component.update: epaper_display");
     lines.push("#               - script.execute: manage_run_and_sleep");
+    if (headerDeviceModel === "m5_paper") {
+        lines.push("#             - priority: 220.0");
+        lines.push("#               then:");
+        lines.push("#                   - it8951e.clear");
+        lines.push("#                   - delay: 100ms");
+        lines.push("#                   - component.update: m5paper_display");
+        lines.push("#             - priority: -100.0");
+        lines.push("#               then:");
+        lines.push("#               - delay: 10s");
+        lines.push("#               - component.update: m5paper_display ");    
+        lines.push("#");
+        lines.push("# STEP M5Paper: Add or modify the following sections as follows:");
+        lines.push("#");
+        lines.push("#         esp32:");
+        lines.push("#           board: m5stack_paper");
+        lines.push("#           flash_size: 16MB");
+        lines.push("#           framework:");
+        lines.push("#             type: arduino");
+        lines.push("#         ");
+        lines.push("#         external_components:");
+        lines.push("#           - source: github://Passific/m5paper_esphome");
+        lines.push("#         ");
+        lines.push("#");
+        lines.push("#         m5paper:");
+        lines.push("#           battery_power_pin: GPIO5");
+        lines.push("#           main_power_pin: GPIO2");
+    }
+
     lines.push("#");
     lines.push("# STEP 4: Paste this ENTIRE snippet after the captive_portal: line");
     lines.push("#         All hardware configuration (sensors, buttons, etc.) is included.");

@@ -362,6 +362,7 @@ class LayoutManager {
                                 <option value="E1001">reTerminal E1001 (Monochrome 800×480)</option>
                                 <option value="E1002">reTerminal E1002 (6-Color 800×480)</option>
                                 <option value="TRMNL">Official TRMNL (ESP32-C3 800×480)</option>
+                                <option value="M5PAPER">M5 Paper (ESP32-D0WDQ6-V3 540×960)</option>
                             </select>
                             <p class="hint" style="color: var(--muted); font-size: 11px; margin-top: 4px;">Select the device that will display this layout.</p>
                         </div>
@@ -424,6 +425,8 @@ class LayoutManager {
             deviceModel = "reterminal_e1002";
         } else if (deviceType === "TRMNL" || deviceType.toLowerCase() === "trmnl") {
             deviceModel = "trmnl";
+        } else if (deviceType === "M5PAPER" || deviceType.toLowerCase() === "m5paper") {
+            deviceModel = "m5_paper";
         }
 
         try {

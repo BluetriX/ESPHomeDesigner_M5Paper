@@ -53,7 +53,7 @@ Design your e-ink dashboard visually, click generate, flash it - done. No YAML w
 
 **Important:** Copy the Material Design Icons font file first!
 
-From this repo: `font_ttf/font_ttf/materialdesignicons-webfont.ttf`  
+From this repo: `esphome/fonts/materialdesignicons-webfont.ttf`  
 To your ESPHome: `/config/esphome/fonts/materialdesignicons-webfont.ttf`
 
 (Create the `fonts` folder if it doesn't exist)
@@ -181,6 +181,7 @@ The workflow is safe and deterministic - same layout always produces the same YA
 - Seeed Studio reTerminal E1001 (ESP32-S3, 800x480 e-paper, black/white)
 - Seeed Studio reTerminal E1002 (ESP32-S3, 800x480 e-paper, color)
 - TRMNL (ESP32-C3 e-paper device)
+- M5 Paper (ESP32-D0WDQ6-V3, 540 x 960 e-paper, black/white)
 
 **Hardware Features Exposed:**
 - 3 physical buttons (GPIO 3/4/5)

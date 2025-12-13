@@ -530,7 +530,8 @@ class PropertiesPanel {
             const fillWrap = document.createElement("div");
             fillWrap.className = "field";
             fillWrap.style.marginTop = "12px";
-            const isFullScreen = (widget.x === 0 && widget.y === 0 && widget.width === 800 && widget.height === 480); // Assuming 800x480
+            const dims = AppState.getCanvasDimensions();
+            const isFullScreen = (widget.x === 0 && widget.y === 0 && widget.width === dims.width && widget.height === dims.height);
             const fillBtn = document.createElement("button");
             fillBtn.className = "btn " + (isFullScreen ? "btn-primary" : "btn-secondary") + " btn-full";
             fillBtn.textContent = isFullScreen ? "✓ Full Screen (click to restore)" : "⛶ Fill Screen";
@@ -539,7 +540,7 @@ class PropertiesPanel {
                 if (isFullScreen) {
                     AppState.updateWidget(widget.id, { x: 50, y: 50, width: 200, height: 150 });
                 } else {
-                    AppState.updateWidget(widget.id, { x: 0, y: 0, width: 800, height: 480 });
+                    AppState.updateWidget(widget.id, { x: 0, y: 0, width: dims.width, height: dims.height });
                 }
             });
             fillWrap.appendChild(fillBtn);
@@ -561,7 +562,8 @@ class PropertiesPanel {
             const fillWrap = document.createElement("div");
             fillWrap.className = "field";
             fillWrap.style.marginTop = "12px";
-            const isFullScreen = (widget.x === 0 && widget.y === 0 && widget.width === 800 && widget.height === 480);
+            const dims = AppState.getCanvasDimensions();
+            const isFullScreen = (widget.x === 0 && widget.y === 0 && widget.width === dims.width && widget.height === dims.height);
             const fillBtn = document.createElement("button");
             fillBtn.className = "btn " + (isFullScreen ? "btn-primary" : "btn-secondary") + " btn-full";
             fillBtn.textContent = isFullScreen ? "✓ Full Screen (click to restore)" : "⛶ Fill Screen";
@@ -570,7 +572,7 @@ class PropertiesPanel {
                 if (isFullScreen) {
                     AppState.updateWidget(widget.id, { x: 50, y: 50, width: 200, height: 150 });
                 } else {
-                    AppState.updateWidget(widget.id, { x: 0, y: 0, width: 800, height: 480 });
+                    AppState.updateWidget(widget.id, { x: 0, y: 0, width: dims.width, height: dims.height });
                 }
             });
             fillWrap.appendChild(fillBtn);

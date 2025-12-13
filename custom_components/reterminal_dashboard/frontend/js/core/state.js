@@ -89,10 +89,13 @@ class StateStore {
     }
 
     getCanvasDimensions() {
+        const deviceModel = this.state.settings.deviceModel || "reterminal_e1001";
+        const resolution = getDeviceResolution(deviceModel);
+
         if (this.state.settings.orientation === ORIENTATIONS.PORTRAIT) {
-            return { width: 480, height: 800 };
+            return { width: resolution.height, height: resolution.width };
         }
-        return { width: 800, height: 480 };
+        return { width: resolution.width, height: resolution.height };
     }
 
     getPagesPayload() {

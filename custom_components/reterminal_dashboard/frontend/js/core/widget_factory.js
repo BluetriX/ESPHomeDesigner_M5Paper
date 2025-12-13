@@ -189,8 +189,9 @@ class WidgetFactory {
                 break;
 
             case "online_image":
-                widget.width = 800;
-                widget.height = 480;
+                const dims = AppState.getCanvasDimensions();
+                widget.width = dims.width;
+                widget.height = dims.height;
                 widget.props = {
                     url: "",
                     invert: (getDeviceModel() === "reterminal_e1001"),
