@@ -80,8 +80,9 @@ const DEVICE_PROFILES = {
             buzzer: false,
             buttons: false,
             sht4x: false
-        },
-        m5_paper: {
+        }
+    },
+    m5_paper: {
             name: "m5Paper (ESP32-D0WDQ6-V3)",
             displayModel: "4.7in",
             displayPlatform: "it8951e",
@@ -105,7 +106,6 @@ const DEVICE_PROFILES = {
                 buttons: true,
                 sht4x: false
             }
-        }
     }
 };
 
