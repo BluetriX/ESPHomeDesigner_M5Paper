@@ -1203,7 +1203,7 @@ function generateSnippetLocally() {
     // Generated from device profile - replaces template sensor sections
     // ========================================================================
 
-    const deviceModel = getDeviceModel();
+    const deviceModel = payload.device_model || getDeviceModel();
     const profile = DEVICE_PROFILES[deviceModel] || DEVICE_PROFILES.reterminal_e1001;
     const numPages = pagesLocal.length || 5;
 
