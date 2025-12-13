@@ -150,6 +150,7 @@ class StateStore {
 
     setDeviceModel(model) {
         this.state.deviceModel = model;
+        this.state.settings.device_model = model;
         emit(EVENTS.SETTINGS_CHANGED, { deviceModel: model });
         this.updateLayoutIndicator();
     }
