@@ -89,7 +89,7 @@ class StateStore {
     }
 
     getCanvasDimensions() {
-        const deviceModel = this.state.settings.deviceModel || "reterminal_e1001";
+        const deviceModel = this.state.settings.device_model || this.state.deviceModel || "reterminal_e1001";
         const resolution = getDeviceResolution(deviceModel);
 
         if (this.state.settings.orientation === ORIENTATIONS.PORTRAIT) {
