@@ -1206,8 +1206,12 @@ function generateSnippetLocally() {
     const deviceModel = payload.device_model || getDeviceModel();
     console.log("[YAML Export] Device Model:", deviceModel);
     console.log("[YAML Export] Payload:", payload);
+    console.log("[YAML Export] Available profiles:", Object.keys(DEVICE_PROFILES));
+    console.log("[YAML Export] Profile lookup result:", DEVICE_PROFILES[deviceModel]);
     console.log("[YAML Export] Profile loaded:", DEVICE_PROFILES[deviceModel]?.name || "FALLBACK TO E1001");
     const profile = DEVICE_PROFILES[deviceModel] || DEVICE_PROFILES.reterminal_e1001;
+    console.log("[YAML Export] Final profile pins.spi:", profile.pins.spi);
+    console.log("[YAML Export] Final profile pins.i2c:", profile.pins.i2c);
     const numPages = pagesLocal.length || 5;
 
     // Generate globals section (required for navigation, refresh, and quote storage)
