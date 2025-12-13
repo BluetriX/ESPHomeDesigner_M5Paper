@@ -1204,6 +1204,9 @@ function generateSnippetLocally() {
     // ========================================================================
 
     const deviceModel = payload.device_model || getDeviceModel();
+    console.log("[YAML Export] Device Model:", deviceModel);
+    console.log("[YAML Export] Payload:", payload);
+    console.log("[YAML Export] Profile loaded:", DEVICE_PROFILES[deviceModel]?.name || "FALLBACK TO E1001");
     const profile = DEVICE_PROFILES[deviceModel] || DEVICE_PROFILES.reterminal_e1001;
     const numPages = pagesLocal.length || 5;
 
