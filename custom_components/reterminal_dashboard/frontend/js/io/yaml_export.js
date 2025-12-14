@@ -1604,7 +1604,7 @@ function generateSnippetLocally() {
         // Landscape mode (960×540 canvas) → rotation: 0° to match landscape display
         const m5Rotation = (payload.orientation === "portrait") ? "270" : "0";
         lines.push(`    rotation: ${m5Rotation}`);
-        lines.push("    reversed: true");
+        lines.push("    reversed: false");
         lines.push("    update_interval: never");
     } else {
         // Default / E1001 configuration (Waveshare)
@@ -1635,23 +1635,19 @@ function generateSnippetLocally() {
         lines.push("      const auto COLOR_YELLOW = Color(255, 255, 0, 0);");
     } else if (getDeviceModel() === "m5_paper") {
         // M5 Paper with IT8951E supports true grayscale (16 levels)
-        lines.push("      const auto COLOR_ON = Color(0, 0, 0);         // Black");
-        lines.push("      const auto COLOR_OFF = Color(255, 255, 255);   // White");
-        lines.push("      const auto COLOR_DARKGRAY = Color(64, 64, 64);   // ~25% brightness");
-        lines.push("      const auto COLOR_GRAY = Color(128, 128, 128);    // 50% brightness");
-        lines.push("      const auto COLOR_LIGHTGRAY = Color(192, 192, 192); // ~75% brightness");
+        // NOTE: IT8951E uses inverted color logic - white is 0x00, black is 0xFF
+        lines.push("      const auto COLOR_ON = Color(255, 255, 255);   // Black (inverted)");
+        lines.push("      const auto COLOR_OFF = Color(0, 0, 0);         // White (inverted)");
+        lines.push("      const auto COLOR_DARKGRAY = Color(191, 191, 191);   // ~75% darkness (inverted)");
+        lines.push("      const auto COLOR_GRAY = Color(127, 127, 127);        // 50% gray");
+        lines.push("      const auto COLOR_LIGHTGRAY = Color(63, 63, 63);     // ~25% darkness (inverted)");
     } else {
         // E1001/TRMNL is a binary display - use 0/1
         lines.push("      Color COLOR_ON = Color(1);");
         lines.push("      Color COLOR_OFF = Color(0);");
     }
 
-    // For M5 Paper with reversed=true, fill with black (which displays as white)
-    if (getDeviceModel() === "m5_paper") {
-        lines.push("      it.fill(COLOR_ON);  // Fill with black (displays as white due to reversed=true)");
-    } else {
-        lines.push("      it.fill(COLOR_OFF);");
-    }
+    lines.push("      it.fill(COLOR_OFF);");
     lines.push("");
     lines.push("      int page = id(display_page);");
 
