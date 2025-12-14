@@ -1599,10 +1599,12 @@ function generateSnippetLocally() {
         lines.push("    reset_pin: GPIO23");
         lines.push("    reset_duration: 100ms");
         lines.push("    busy_pin: GPIO27");
-        // M5 Paper native is portrait, so landscape = 270°, portrait = 0° (or 180°)
-        const m5Rotation = (payload.orientation === "portrait") ? "0" : "270";
+        // M5 Paper native is portrait (540×960)
+        // Portrait mode (540×960 canvas) → rotation: 270° for proper orientation
+        // Landscape mode (960×540 canvas) → rotation: 0° to match landscape display
+        const m5Rotation = (payload.orientation === "portrait") ? "270" : "0";
         lines.push(`    rotation: ${m5Rotation}`);
-        lines.push("    reversed: false");
+        lines.push("    reversed: true");
         lines.push("    update_interval: never");
     } else {
         // Default / E1001 configuration (Waveshare)
