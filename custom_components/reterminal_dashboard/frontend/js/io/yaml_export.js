@@ -93,7 +93,7 @@ const DEVICE_PROFILES = {
                 batteryEnable: null,
                 batteryAdc: "GPIO35",
                 buzzer: null,
-                buttons: { left: "GPIO39", right: "GPIO37", refresh: null }
+                buttons: { left: "GPIO39", right: "GPIO37", refresh: "GPIO38" }
             },
             battery: {
                 attenuation: "11db",
@@ -795,11 +795,11 @@ function generateSnippetLocally() {
         lines.push("#               then:");
         lines.push("#                   - it8951e.clear");
         lines.push("#                   - delay: 100ms");
-        lines.push("#                   - component.update: m5paper_display");
+        lines.push("#                   - component.update: epaper_display");
         lines.push("#             - priority: -100.0");
         lines.push("#               then:");
         lines.push("#               - delay: 10s");
-        lines.push("#               - component.update: m5paper_display ");    
+        lines.push("#               - component.update: epaper_display ");    
         lines.push("#");
         lines.push("# STEP M5Paper: Add or modify the following sections as follows:");
         lines.push("#");
