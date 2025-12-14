@@ -1645,7 +1645,13 @@ function generateSnippetLocally() {
         lines.push("      Color COLOR_ON = Color(1);");
         lines.push("      Color COLOR_OFF = Color(0);");
     }
-    lines.push("      it.fill(COLOR_OFF);");
+
+    // For M5 Paper with reversed=true, fill with black (which displays as white)
+    if (getDeviceModel() === "m5_paper") {
+        lines.push("      it.fill(COLOR_ON);  // Fill with black (displays as white due to reversed=true)");
+    } else {
+        lines.push("      it.fill(COLOR_OFF);");
+    }
     lines.push("");
     lines.push("      int page = id(display_page);");
 
