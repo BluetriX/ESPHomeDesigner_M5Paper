@@ -8,8 +8,9 @@
 window.DEVICE_PROFILES = {
     reterminal_e1001: {
         name: "reTerminal E1001 (Monochrome)",
-        displayModel: "7.50inv2",
+        displayModel: "7.50inv2p",
         displayPlatform: "waveshare_epaper",
+        psram_mode: "octal",
         pins: {
             display: { cs: "GPIO10", dc: "GPIO11", reset: { number: "GPIO12", inverted: false }, busy: { number: "GPIO13", inverted: true } },
             i2c: { sda: "GPIO19", scl: "GPIO20" },
@@ -35,6 +36,7 @@ window.DEVICE_PROFILES = {
         name: "reTerminal E1002 (6-Color)",
         displayModel: "Seeed-reTerminal-E1002",
         displayPlatform: "epaper_spi",
+        psram_mode: "octal",
         pins: {
             display: { cs: null, dc: null, reset: null, busy: null },
             i2c: { sda: "GPIO19", scl: "GPIO20" },
@@ -121,7 +123,7 @@ window.DEVICE_PROFILES = {
         features: {
             psram: true,
             buzzer: false,
-            buttons: false, // Touchscreen only
+            buttons: true, // Has multifunction button
             lcd: false,
             epaper: true,
             touch: true // Has GT911
@@ -133,7 +135,11 @@ window.DEVICE_PROFILES = {
             batteryEnable: null,
             batteryAdc: "GPIO35",
             buzzer: null,
-            buttons: null
+            buttons: {
+                left: { number: "GPIO39", mode: "INPUT" },
+                right: { number: "GPIO37", mode: "INPUT" },
+                refresh: { number: "GPIO38", mode: "INPUT" }
+            }
         },
         m5paper: {
             battery_power_pin: "GPIO5",
@@ -157,7 +163,7 @@ window.DEVICE_PROFILES = {
         ]
     },
     esp32_s3_photopainter: {
-        name: "Waveshare PhotoPainter (7-Color)",
+        name: "Waveshare PhotoPainter (6-Color)",
         displayModel: "7.30in-f",
         displayPlatform: "waveshare_epaper",
         pins: {

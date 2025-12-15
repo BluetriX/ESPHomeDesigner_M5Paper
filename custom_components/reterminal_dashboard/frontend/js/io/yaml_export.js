@@ -109,6 +109,7 @@ function generateSnippetLocally() {
     }
     lines.push("#");
     lines.push("# STEP 3: Add the on_boot sequence");
+    lines.push("#         (TIP: If compiling fails with 'OOM' or 'Killed', add 'compile_process_limit: 1' to your 'esphome:' section)");
     if (getDeviceModel() === "esp32_s3_photopainter") {
         lines.push("#         CRITICAL FOR PHOTOPAINTER: Use this exact on_boot sequence to prevent boot loops!");
         lines.push("#         Paste this under 'esphome:' in your YAML:");
@@ -562,7 +563,7 @@ function generateSnippetLocally() {
             }
 
             const entityId = (w.entity_id || "").trim();
-            const localSensorId = entityId.replace(/^sensor\./, "").replace(/\./g, "_").replace(/-/g, "_") || "none";
+            const localSensorId = entityId.replace(/[^a-zA-Z0-9_]/g, "_") || "none";
             const lineType = (p.line_type || "SOLID").toUpperCase();
             const lineThickness = parseInt(p.line_thickness || 3, 10);
             const border = p.border !== false;
@@ -776,6 +777,54 @@ function generateSnippetLocally() {
     const fontLines = ["font:"];
     const definedFontIds = new Set();
     const usedFontIds = new Set();
+    // Collection for used MDI icons by size to avoid loading unused glyphs in every font
+    // Map<size, Set<hexCode>>
+    const iconCodesBySize = new Map();
+
+    // Scan all pages for MDI icons
+    pagesLocal.forEach(page => {
+        if (page.widgets) {
+            page.widgets.forEach(w => {
+                const t = (w.type || "").toLowerCase();
+                const p = w.props || {};
+
+                // Helper to add code to specific size
+                const addCode = (code, size) => {
+                    if (!code) return;
+                    const raw = code.trim().toUpperCase().replace(/^0X/, "").replace(/^\\U000/, "");
+                    if (/^F[0-9A-F]{4}$/i.test(raw)) {
+                        const s = parseInt(size, 10);
+                        if (!iconCodesBySize.has(s)) iconCodesBySize.set(s, new Set());
+                        iconCodesBySize.get(s).add(raw);
+                    }
+                };
+
+                if (t === "icon") {
+                    // Default size 48 matches rendering logic
+                    const size = p.size || 48;
+                    addCode(p.code, size);
+                } else if (t === "weather_icon") {
+                    // Weather Icon defaults to 48
+                    const size = p.size || 48;
+                    const codes = ["F0594", "F0590", "F0026", "F0591", "F0592", "F0593", "F067E",
+                        "F0595", "F0596", "F0597", "F0598", "F067F", "F0599", "F059D", "F059E"];
+                    codes.forEach(c => addCode(c, size));
+                } else if (t === "weather_forecast") {
+                    // Weather Forecast uses icon_size (default 32)
+                    const size = p.icon_size || 32;
+                    const codes = ["F0594", "F0590", "F0026", "F0591", "F0592", "F0593", "F067E",
+                        "F0595", "F0596", "F0597", "F0598", "F067F", "F0599", "F059D", "F059E"];
+                    codes.forEach(c => addCode(c, size));
+                } else if (t === "battery_icon" || t === "battery") {
+                    // Battery icon defaults to 24
+                    const size = p.size || 24;
+                    const codes = ["F0079", "F007A", "F007B", "F007C", "F007D", "F007E", "F007F",
+                        "F0080", "F0081", "F0082", "F0083"];
+                    codes.forEach(c => addCode(c, size));
+                }
+            });
+        }
+    });
     // Mark where fonts should be inserted (before display)
     const fontInsertMarker = "__FONT_INSERT_MARKER__";
     lines.push(fontInsertMarker);
@@ -803,8 +852,14 @@ function generateSnippetLocally() {
                 fontLines.push(`  - file: "fonts/materialdesignicons-webfont.ttf"`);
                 fontLines.push(`    id: ${id}`);
                 fontLines.push(`    size: ${size}`);
-                fontLines.push("    glyphs:");
-                fontLines.push("      - \"\\U000F0000\" - \"\\U000F1AF0\""); // Full MDI range
+
+                // Get glyphs specifically for this size
+                const codesRef = iconCodesBySize.get(parseInt(size, 10));
+                const sortedCodes = codesRef ? Array.from(codesRef).sort() : [];
+
+                // Format matching the fork: glyphs: ["\U000Fxxxx", "\U000Fyyyy"]
+                const glyphList = sortedCodes.map(c => `"\\U000${c}"`).join(", ");
+                fontLines.push(`    glyphs: [${glyphList}]`);
             } else {
                 // Use Google Fonts URL - ESPHome can fetch directly!
                 // Format: https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap
@@ -941,37 +996,75 @@ function generateSnippetLocally() {
             const RECT_Y_OFFSET = -15;
             const TEXT_Y_OFFSET = 0;
 
-            lines.push("      const auto COLOR_WHITE = Color(255, 255, 255);");
+            if (getDeviceModel() === "m5stack_paper" || getDeviceModel() === "reterminal_e1001") {
+                lines.push("      const auto COLOR_WHITE = Color(0, 0, 0); // Inverted for e-ink");
+            } else {
+                lines.push("      const auto COLOR_WHITE = Color(255, 255, 255);");
+            }
             // ============================================================================
-            // COLOR MAPPING FOR 7-COLOR ACeP DISPLAYS (7.30in-f PhotoPainter, etc.)
-            // These displays use an indexed 7-color palette, NOT true RGB.
-            // The ESPHome waveshare_epaper driver maps RGB to palette indices.
-            // Using 3-argument Color(r,g,b) format for cleaner palette matching.
-            // Palette: Black(0), White(1), Green(2), Blue(3), Red(4), Yellow(5), Orange(6)
+            // COLOR MAPPING FOR 'Waveshare PhotoPainter' (7.30in-f)
+            // Manufacturer Confirmed: 6-Color Display (Not 7), and BRG pixel order.
+            // MAPPING BASED ON USER TESTING OBSERVATIONS (Input -> Output):
+            // - Blue(0,0,255)    -> Shows RED    => Use (0,0,255) for COLOR_RED
+            // - Orange(255,128,0)-> Shows GREEN  => Use (255,128,0) for COLOR_GREEN
+            // - Yellow(255,255,0)-> Shows BLUE   => Use (255,255,0) for COLOR_BLUE
+            // - Green(0,255,0)   -> Shows YELLOW => Use (0,255,0) for COLOR_YELLOW
+            // - Red(255,0,0)     -> Shows WHITE/Invisible
+            // - Display is 6-color (Black, White, Red, Green, Blue, Yellow)
             // ============================================================================
-            lines.push("      const auto COLOR_BLACK = Color(0, 0, 0);");
-            lines.push("      const auto COLOR_GREEN = Color(0, 255, 0);");
-            lines.push("      const auto COLOR_BLUE = Color(0, 0, 255);");
-            lines.push("      const auto COLOR_RED = Color(255, 0, 0);");
-            lines.push("      const auto COLOR_YELLOW = Color(255, 255, 0);");
-            lines.push("      const auto COLOR_ORANGE = Color(255, 128, 0);");
+            if (getDeviceModel() === "m5stack_paper" || getDeviceModel() === "reterminal_e1001") {
+                lines.push("      const auto COLOR_BLACK = Color(255, 255, 255); // Inverted for e-ink");
+            } else {
+                lines.push("      const auto COLOR_BLACK = Color(0, 0, 0);");
+            }
+            lines.push("      const auto COLOR_RED = Color(0, 0, 255);");      // Map to Blue -> Device shows Red
+            lines.push("      const auto COLOR_GREEN = Color(255, 128, 0);");  // Map to Orange -> Device shows Green
+            lines.push("      const auto COLOR_BLUE = Color(255, 255, 0);");   // Map to Yellow -> Device shows Blue
+            lines.push("      const auto COLOR_YELLOW = Color(0, 255, 0);");   // Map to Green -> Device shows Yellow
+            lines.push("      const auto COLOR_ORANGE = Color(0, 0, 255);");   // 6-Color display: Map Orange to Red
             lines.push("      const auto COLOR_OFF = COLOR_WHITE;");
             lines.push("      const auto COLOR_ON = COLOR_BLACK;");
             lines.push("");
 
-            // Dither Helper - draws a checkerboard pattern (black and white alternating)
-            lines.push("      auto apply_grey_dither_mask = [&](int x, int y, int w, int h) {");
-            lines.push("          for (int i = 0; i < w; i++) {");
-            lines.push("              for (int j = 0; j < h; j++) {");
-            lines.push("                  if ((x + i + y + j) % 2 == 0) {");
-            lines.push("                      it.draw_pixel_at(x + i, y + j, COLOR_ON);");
-            lines.push("                  } else {");
-            lines.push("                      it.draw_pixel_at(x + i, y + j, COLOR_OFF);");
-            lines.push("                  }");
-            lines.push("              }");
-            lines.push("          }");
-            lines.push("      };");
-            lines.push("");
+            // Check if any widget needs dithering (Icons set to Gray)
+            let needsDither = false;
+            pagesLocal.forEach(p => {
+                if (p.widgets) p.widgets.forEach(w => {
+                    const t = (w.type || "").toLowerCase();
+                    const p = w.props || {};
+                    const c = (p.color ? p.color.toLowerCase() : "");
+
+                    // Check generic gray color usage
+                    if (c === "gray" || c === "grey") {
+                        needsDither = true;
+                    }
+
+                    // Calendar specific checks
+                    if (t === "calendar") {
+                        const bg = (p.background_color ? p.background_color.toLowerCase() : "");
+                        const bc = (p.border_color ? p.border_color.toLowerCase() : "");
+                        if (bg === "gray" || bg === "grey" || bc === "gray" || bc === "grey") {
+                            needsDither = true;
+                        }
+                    }
+                });
+            });
+
+            if (needsDither) {
+                // Dither Helper - draws a checkerboard pattern (black and white alternating)
+                lines.push("      auto apply_grey_dither_mask = [&](int x, int y, int w, int h) {");
+                lines.push("          for (int i = 0; i < w; i++) {");
+                lines.push("              for (int j = 0; j < h; j++) {");
+                lines.push("                  if ((x + i + y + j) % 2 == 0) {");
+                lines.push("                      it.draw_pixel_at(x + i, y + j, COLOR_ON);");
+                lines.push("                  } else {");
+                lines.push("                      it.draw_pixel_at(x + i, y + j, COLOR_OFF);");
+                lines.push("                  }");
+                lines.push("              }");
+                lines.push("          }");
+                lines.push("      };");
+                lines.push("");
+            }
 
             // Time extraction helper (for calendar)
             lines.push("      auto extract_time = [](const char* iso_str) -> std::string {");
@@ -982,40 +1075,42 @@ function generateSnippetLocally() {
             lines.push("      };");
             lines.push("");
 
-            // Calendar matrix helper
-            lines.push("      auto get_calendar_matrix = [](int year, int month, char cal[7][7][3]) {");
-            lines.push("           // Simple calendar calc logic (placeholder for robust implementation)");
-            lines.push("           // Just zero out for now or implement if critical. ");
-            lines.push("           // Actually, usually copied from standard C logic.");
-            lines.push("           // Implementation omitted to save space, assuming clean month view.");
-            lines.push("           // Standard Zellers dominance or similar.");
-            // Real implementation required for Calendar to work? 
-            // Yes. I will add a minimal dummy implementation or the real one if I can recall.
-            // "esp_calendar_data_conversion.py" does work? No this is C++ lambda.
-            // I'll skip complex calc and rely on standard struct or similar if available? 
-            // No, I must implement it.
-            // Minimal:
-            lines.push("           int days_in_month[] = {0,31,28,31,30,31,30,31,31,30,31,30,31};");
-            lines.push("           if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) days_in_month[2] = 29;");
-            lines.push("           struct tm time_in = {0}; time_in.tm_year = year - 1900; time_in.tm_mon = month - 1; time_in.tm_mday = 1;");
-            lines.push("           mktime(&time_in);");
-            lines.push("           int start_day = time_in.tm_wday; // 0=Sun");
-            lines.push("           int day = 1;");
-            lines.push("           // Fill cal");
-            lines.push("           for(int i=0; i<7; i++) for(int j=0; j<7; j++) sprintf(cal[i][j], \"\");");
-            lines.push("           // Header");
-            lines.push("           const char* h[] = {\"S\",\"M\",\"T\",\"W\",\"T\",\"F\",\"S\"};");
-            lines.push("           for(int j=0; j<7; j++) strcpy(cal[0][j], h[j]);");
-            lines.push("           // Days");
-            lines.push("           int row = 1;");
-            lines.push("           for (int j=start_day; j<7; j++) { sprintf(cal[row][j], \"%d\", day++); }");
-            lines.push("           row++;");
-            lines.push("           while (day <= days_in_month[month]) {");
-            lines.push("               for (int j=0; j<7; j++) { if (day <= days_in_month[month]) sprintf(cal[row][j], \"%d\", day++); }");
-            lines.push("               row++;");
-            lines.push("           }");
-            lines.push("      };");
-            lines.push("");
+            if (calendarWidgets.length > 0) {
+                // Calendar matrix helper
+                lines.push("      auto get_calendar_matrix = [](int year, int month, char cal[7][7][3]) {");
+                lines.push("           // Simple calendar calc logic (placeholder for robust implementation)");
+                lines.push("           // Just zero out for now or implement if critical. ");
+                lines.push("           // Actually, usually copied from standard C logic.");
+                lines.push("           // Implementation omitted to save space, assuming clean month view.");
+                lines.push("           // Standard Zellers dominance or similar.");
+                // Real implementation required for Calendar to work? 
+                // Yes. I will add a minimal dummy implementation or the real one if I can recall.
+                // "esp_calendar_data_conversion.py" does work? No this is C++ lambda.
+                // I'll skip complex calc and rely on standard struct or similar if available? 
+                // No, I must implement it.
+                // Minimal:
+                lines.push("           int days_in_month[] = {0,31,28,31,30,31,30,31,31,30,31,30,31};");
+                lines.push("           if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) days_in_month[2] = 29;");
+                lines.push("           struct tm time_in = {0}; time_in.tm_year = year - 1900; time_in.tm_mon = month - 1; time_in.tm_mday = 1;");
+                lines.push("           mktime(&time_in);");
+                lines.push("           int start_day = time_in.tm_wday; // 0=Sun");
+                lines.push("           int day = 1;");
+                lines.push("           // Fill cal");
+                lines.push("           for(int i=0; i<7; i++) for(int j=0; j<7; j++) sprintf(cal[i][j], \"\");");
+                lines.push("           // Header");
+                lines.push("           const char* h[] = {\"S\",\"M\",\"T\",\"W\",\"T\",\"F\",\"S\"};");
+                lines.push("           for(int j=0; j<7; j++) strcpy(cal[0][j], h[j]);");
+                lines.push("           // Days");
+                lines.push("           int row = 1;");
+                lines.push("           for (int j=start_day; j<7; j++) { sprintf(cal[row][j], \"%d\", day++); }");
+                lines.push("           row++;");
+                lines.push("           while (day <= days_in_month[month]) {");
+                lines.push("               for (int j=0; j<7; j++) { if (day <= days_in_month[month]) sprintf(cal[row][j], \"%d\", day++); }");
+                lines.push("               row++;");
+                lines.push("           }");
+                lines.push("      };");
+                lines.push("");
+            }
 
             // PAGE LOOP
             lines.push(`      int currentPage = id(display_page);`);
@@ -1223,7 +1318,8 @@ function generateSnippetLocally() {
                             const color = getColorConst(colorProp);
                             const fontRef = addFont("Material Design Icons", 400, size);
                             lines.push(`        // widget:icon id:${w.id} type:icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} code:${code} size:${size} color:${colorProp} ${getCondProps(w)}`);
-                            lines.push(`        it.print(${w.x}, ${w.y}, id(${fontRef}), ${color}, "\\U000${code}");`);
+                            // Use printf for icons to handle unicode safely
+                            lines.push(`        it.printf(${w.x}, ${w.y}, id(${fontRef}), ${color}, "%s", "\\U000${code}");`);
                             // Apply grey dithering if color is gray
                             if (colorProp.toLowerCase() === "gray") {
                                 lines.push(`        apply_grey_dither_mask(${w.x}, ${w.y}, ${size}, ${size});`);
@@ -1293,8 +1389,8 @@ function generateSnippetLocally() {
                             lines.push(`        // widget:graph id:${w.id} type:graph x:${w.x} y:${w.y} w:${w.width} h:${w.height} title:"${title}" entity:${entityId} local:${!!p.is_local_sensor} duration:${duration} border:${borderEnabled} color:${colorProp} x_grid:${xGrid} y_grid:${yGrid} line_type:${lineType} line_thickness:${lineThickness} continuous:${continuous} min_value:${minValue} max_value:${maxValue} min_range:${minRange} max_range:${maxRange} ${getCondProps(w)}`);
 
                             if (entityId) {
-                                // Pass color as 4th parameter to set border/grid color (required for e-paper)
-                                lines.push(`        it.graph(${w.x}, ${w.y}, id(${safeId}), ${color});`);
+                                // Pass color as 4th parameter? NO, standard Graph component does not support it.
+                                lines.push(`        it.graph(${w.x}, ${w.y}, id(${safeId}));`);
 
                                 // Draw Border if enabled
                                 if (borderEnabled) {
@@ -2202,7 +2298,9 @@ function generateScriptSection(payload, pagesLocal, profile = {}) {
     lines.push("      - lambda: |-");
     lines.push("          if (!id(ha_time).now().is_valid()) {");
     lines.push("            ESP_LOGW(\"script\", \"Time sync failed/invalid! Sleeping for 1 hour to retry.\");");
-    lines.push("            id(deep_sleep_1).set_sleep_duration(3600 * 1000);");
+    if (payload.deep_sleep_enabled || profile.model === "m5stack_coreink" || (profile.name && profile.name.includes("CoreInk"))) {
+        lines.push("            id(deep_sleep_1).set_sleep_duration(3600 * 1000);");
+    }
     lines.push("            return;");
     lines.push("          }");
 
