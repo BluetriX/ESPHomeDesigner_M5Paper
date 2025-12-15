@@ -503,7 +503,11 @@ function generatePSRAMSection(profile) {
     }
 
     // Default: let ESPHome auto-detect PSRAM (safest for unknown boards)
-    return [];
+    // But we MUST provide the psram: key to enable it.
+    return [
+        "psram:",
+        ""
+    ];
 }
 
 

@@ -2,9 +2,25 @@
 
 
 
+## v0.7.1 - Hotfix
+
+**Release Date:** December 15, 2025
+
+### 🐛 Bug Fixes
+- **Inverted Options**: Fixed an issue where the `COLOR_WHITE` and `COLOR_BLACK` definitions were inverted for the `reTerminal E1001` device.
+- **Ghost Code**: Cleaned up the generated YAML to remove unused helper functions (like `get_calendar_matrix` and `apply_grey_dither_mask`) when they are not needed.
+- **Glyph Tracker Regression**: Fixed a critical regression in the glyph tracker.
+- **Hide Unit Persistence**: Fixed a bug where "Hide Default Units" was not persistent when using "Update Layout from YAML".
+
+### 📱 Experimental Hardware
+- **M5Paper & M5Stack CoreInk**: This build includes experimental support for M5Paper and M5Stack CoreInk. These features are from the development branch and require testing.
+- **reTerminal E1001 Model Update**: Default model updated from `7.50inv2` to `7.50inv2p`. This change is untested. If it does not work, please manually revert the model in your YAML back to `7.50inv2`.
+
+---
+
 ## v0.7.0 - Experimental LVGL & Enhancements
 
-**Release Date:** December 9, 2025
+**Release Date:** December 14, 2025
 
 ### 🔧 Architecture Changes
 - **Decoupled Hardware Profile**: Hardware definition logic has been moved out of `yaml_export.js` into dedicated `hardware_generators.js` and `devices.js` files, significantly improving code maintainability and safety.
