@@ -1115,18 +1115,22 @@ class PropertiesPanel {
     addCheckbox(label, value, onChange) {
         const wrap = document.createElement("div");
         wrap.className = "field";
+        wrap.style.marginBottom = "8px"; // Added spacing
+
         const checkboxLabel = document.createElement("label");
         checkboxLabel.style.display = "flex";
         checkboxLabel.style.alignItems = "center";
-        checkboxLabel.style.gap = "6px";
-        checkboxLabel.style.fontSize = "11px";
+        checkboxLabel.style.gap = "8px"; // Increased gap
+        checkboxLabel.style.fontSize = "13px"; // Increased font size
+        checkboxLabel.style.cursor = "pointer"; // Better UX
 
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = !!value;
-        checkbox.style.width = "auto";
-        checkbox.style.height = "auto";
+        checkbox.style.width = "16px"; // Bigger checkbox
+        checkbox.style.height = "16px"; // Bigger checkbox
         checkbox.style.margin = "0";
+        checkbox.style.cursor = "pointer";
         checkbox.addEventListener("change", () => onChange(checkbox.checked));
 
         const span = document.createElement("span");
@@ -1140,10 +1144,11 @@ class PropertiesPanel {
 
     addHint(htmlContent) {
         const hint = document.createElement("div");
-        hint.style.fontSize = "9px";
+        hint.style.fontSize = "11px"; // Increased font size
         hint.style.color = "#666";
-        hint.style.marginTop = "-8px";
-        hint.style.marginBottom = "8px";
+        hint.style.marginTop = "4px"; // Small top margin
+        hint.style.marginBottom = "12px"; // Increased bottom spacing
+        hint.style.lineHeight = "1.4"; // Better readability
         hint.innerHTML = htmlContent;
         this.panel.appendChild(hint);
     }

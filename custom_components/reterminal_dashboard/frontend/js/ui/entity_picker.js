@@ -58,7 +58,7 @@ function openEntityPickerForWidget(widget, inputEl, callback) {
     const domainSelect = document.createElement("select");
     domainSelect.className = "prop-input";
     domainSelect.style.width = "80px";
-    ["all", "sensor", "binary_sensor", "weather"].forEach((d) => {
+    ["all", "sensor", "binary_sensor", "weather", "input_text", "input_select", "switch", "input_boolean", "input_number"].forEach((d) => {
         const opt = document.createElement("option");
         opt.value = d;
         opt.textContent = d;

@@ -54,7 +54,7 @@ async function fetchEntityStates() {
     entityStatesFetchInProgress = true;
     try {
         console.log("[EntityStates] Fetching from:", `${HA_API_BASE}/entities`);
-        const resp = await fetch(`${HA_API_BASE}/entities?domains=sensor,binary_sensor,weather,switch,input_boolean,input_number,input_select,button,input_button`);
+        const resp = await fetch(`${HA_API_BASE}/entities?domains=sensor,binary_sensor,weather,switch,input_boolean,input_number,input_select,input_text,button,input_button`);
         if (!resp.ok) {
             console.warn("[EntityStates] Failed to fetch:", resp.status);
             haEntitiesLoadError = true;

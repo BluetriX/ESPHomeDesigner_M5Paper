@@ -38,6 +38,7 @@ function generateSnippetLocally() {
     const graphWidgets = [];
     const weatherForecastWidgets = [];
     const onlineImageWidgets = [];
+    const qrCodeWidgets = [];
     const staticImageMap = new Map();
 
     pagesLocal.forEach(p => {
@@ -55,6 +56,9 @@ function generateSnippetLocally() {
                 }
                 if (t === "puppet" || t === "online_image") {
                     onlineImageWidgets.push(w);
+                }
+                if (t === "qr_code") {
+                    qrCodeWidgets.push(w);
                 }
                 if (t === "image") {
                     const path = (w.props?.path || "").trim();
@@ -104,6 +108,10 @@ function generateSnippetLocally() {
         lines.push("#         - Board: m5stack-paper");
         lines.push("#         - Framework: arduino (Required)");
         lines.push("#         - Flash Size: 16MB");
+    } else if (getDeviceModel() === "trmnl_diy_esp32s3") {
+        lines.push("#         - Select: ESP32-S3");
+        lines.push("#         - Board: esp32-s3-devkitc-1");
+        lines.push("#         - Framework: esp-idf (Recommended) or arduino");
     } else {
         lines.push("#         - Select: ESP32-S3 (or appropriate for your board)");
     }
@@ -304,7 +312,9 @@ function generateSnippetLocally() {
                 const isLocal = !!props.is_local_sensor;
 
                 // Only import HA entities, not local ones
-                if (entity && !isLocal) {
+                // CHANGE: Skip weather entities explicitly here to prevent duplication/invalid type
+                // They will be handled in the "Weather Entity Sensors" block
+                if (entity && !isLocal && !entity.startsWith("weather.")) {
                     const entityId = entity.replace(/[^a-zA-Z0-9_]/g, "_");
 
                     if (isTextSensor || entity.startsWith("text_sensor.")) {
@@ -329,7 +339,7 @@ function generateSnippetLocally() {
                 }
 
                 // Handle secondary entity
-                if (entity2 && !isLocal) {
+                if (entity2 && !isLocal && !entity2.startsWith("weather.")) {
                     const entityId2 = entity2.replace(/[^a-zA-Z0-9_]/g, "_");
 
                     if (isTextSensor || entity2.startsWith("text_sensor.")) {
@@ -592,6 +602,22 @@ function generateSnippetLocally() {
         lines.push("");
     }
 
+    // Generate qr_code: component declarations
+    if (qrCodeWidgets.length > 0) {
+        lines.push("qr_code:");
+        qrCodeWidgets.forEach(w => {
+            const p = w.props || {};
+            const safeId = `qr_${w.id}`.replace(/-/g, "_");
+            const value = (p.value || "https://esphome.io").replace(/"/g, '\\"');
+            const ecc = p.ecc || "LOW";
+
+            lines.push(`  - id: ${safeId}`);
+            lines.push(`    value: "${value}"`);
+            lines.push(`    ecc: ${ecc}`);
+        });
+        lines.push("");
+    }
+
     // ========================================================================
     // TEXT SENSOR SECTION (Widget sensors: quotes, weather conditions)
     // ========================================================================
@@ -631,8 +657,17 @@ function generateSnippetLocally() {
             const entityId = (w.entity_id || "").trim();
             const p = w.props || {};
             if (p.is_local_sensor) continue; // Skip local sensors
-            if ((t === "sensor_text" || t === "weather_icon") && entityId.startsWith("weather.")) {
-                weatherEntitiesUsed.add(entityId);
+
+            // Allow sensor_text and weather_icon to trigger weather entity generation
+            if (t === "sensor_text" || t === "weather_icon") {
+                if (entityId.startsWith("weather.")) {
+                    weatherEntitiesUsed.add(entityId);
+                }
+                // Check secondary entity for sensor_text
+                const entityId2 = (w.entity_id_2 || p.entity_id_2 || "").trim();
+                if (entityId2 && entityId2.startsWith("weather.")) {
+                    weatherEntitiesUsed.add(entityId2);
+                }
             }
         }
     }
@@ -996,7 +1031,7 @@ function generateSnippetLocally() {
             const RECT_Y_OFFSET = -15;
             const TEXT_Y_OFFSET = 0;
 
-            if (getDeviceModel() === "m5stack_paper" || getDeviceModel() === "reterminal_e1001") {
+            if (getDeviceModel() === "m5stack_paper" || getDeviceModel() === "reterminal_e1001" || getDeviceModel() === "trmnl_diy_esp32s3") {
                 lines.push("      const auto COLOR_WHITE = Color(0, 0, 0); // Inverted for e-ink");
             } else {
                 lines.push("      const auto COLOR_WHITE = Color(255, 255, 255);");
@@ -1012,7 +1047,7 @@ function generateSnippetLocally() {
             // - Red(255,0,0)     -> Shows WHITE/Invisible
             // - Display is 6-color (Black, White, Red, Green, Blue, Yellow)
             // ============================================================================
-            if (getDeviceModel() === "m5stack_paper" || getDeviceModel() === "reterminal_e1001") {
+            if (getDeviceModel() === "m5stack_paper" || getDeviceModel() === "reterminal_e1001" || getDeviceModel() === "trmnl_diy_esp32s3") {
                 lines.push("      const auto COLOR_BLACK = Color(255, 255, 255); // Inverted for e-ink");
             } else {
                 lines.push("      const auto COLOR_BLACK = Color(0, 0, 0);");
@@ -1021,7 +1056,7 @@ function generateSnippetLocally() {
             lines.push("      const auto COLOR_GREEN = Color(255, 128, 0);");  // Map to Orange -> Device shows Green
             lines.push("      const auto COLOR_BLUE = Color(255, 255, 0);");   // Map to Yellow -> Device shows Blue
             lines.push("      const auto COLOR_YELLOW = Color(0, 255, 0);");   // Map to Green -> Device shows Yellow
-            lines.push("      const auto COLOR_ORANGE = Color(0, 0, 255);");   // 6-Color display: Map Orange to Red
+            lines.push("      const auto COLOR_ORANGE = Color(0, 128, 255);"); // Manufacturer Code Key for Orange
             lines.push("      const auto COLOR_OFF = COLOR_WHITE;");
             lines.push("      const auto COLOR_ON = COLOR_BLACK;");
             lines.push("");
@@ -1210,8 +1245,13 @@ function generateSnippetLocally() {
                             // Widget metadata comment - include all properties for round-trip persistence
                             lines.push(`        // widget:sensor_text id:${w.id} type:sensor_text x:${w.x} y:${w.y} w:${w.width} h:${w.height} ent:${entity} entity_2:${entity2} title:"${title}" format:${valueFormat} label_font:${labelFontSize} value_font:${valueFontSize} color:${colorProp} label_align:${align} value_align:${align} precision:${precision} unit:"${unit}" hide_unit:${!!p.hide_unit} prefix:"${prefix}" postfix:"${postfix}" separator:"${separator}" local:${isLocalSensor} text_sensor:${isTextSensor} font_family:"${family}" font_weight:${weight} italic:${italic}`);
 
+                            // Calculate alignment coordinates including Vertical alignment
+                            const alignY = getAlignY(align, w.y, w.height);
+                            const alignX = getAlignX(align, w.x, w.width); // Ensure alignX is available 
+                            const espAlign = `TextAlign::${align}`;
+
                             if (!entity) {
-                                lines.push(`        it.printf(${w.x}, ${w.y}, id(${valueFontId}), ${color}, TextAlign::TOP_LEFT, "No Entity");`);
+                                lines.push(`        it.printf(${alignX}, ${alignY}, id(${valueFontId}), ${color}, ${espAlign}, "No Entity");`);
                             } else {
                                 // Handle entity ID for ESPHome - sanitize for use as C++ identifier
                                 const entityId = entity.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -1221,8 +1261,14 @@ function generateSnippetLocally() {
                                 lines.push(`        {`);
 
                                 // Get value as string - handle text sensors vs numeric sensors
-                                if (isTextSensor || entity.startsWith("text_sensor.")) {
-                                    lines.push(`          std::string val1 = id(${entityId}_txt).state;`);
+                                if (isTextSensor || entity.startsWith("text_sensor.") || entity.startsWith("weather.")) {
+                                    if (entity.startsWith("weather.")) {
+                                        // Weather entities use their direct ID (from Weather Entity Sensors block)
+                                        lines.push(`          std::string val1 = id(${entityId}).state;`);
+                                    } else {
+                                        // Text sensors use _txt suffix (from generic Text Sensor block)
+                                        lines.push(`          std::string val1 = id(${entityId}_txt).state;`);
+                                    }
                                 } else {
                                     // Numeric sensor with optional precision
                                     if (!isNaN(precision) && precision >= 0) {
@@ -1236,8 +1282,12 @@ function generateSnippetLocally() {
 
                                 // Handle secondary entity if present
                                 if (entityId2) {
-                                    if (isTextSensor || (entity2 && entity2.startsWith("text_sensor."))) {
-                                        lines.push(`          std::string val2 = id(${entityId2}_txt).state;`);
+                                    if (isTextSensor || (entity2 && (entity2.startsWith("text_sensor.") || entity2.startsWith("weather.")))) {
+                                        if (entity2.startsWith("weather.")) {
+                                            lines.push(`          std::string val2 = id(${entityId2}).state;`);
+                                        } else {
+                                            lines.push(`          std::string val2 = id(${entityId2}_txt).state;`);
+                                        }
                                     } else {
                                         if (!isNaN(precision) && precision >= 0) {
                                             lines.push(`          char buf2[32];`);
@@ -1258,53 +1308,21 @@ function generateSnippetLocally() {
                                 // Render based on value_format
                                 if (valueFormat === "label_value" && title) {
                                     // Label and value on same line
-                                    // Calculate approximate label width (rough estimate: ~0.6 * fontSize * charCount)
-                                    const labelText = title + ": ";
-                                    const labelWidth = Math.ceil(labelFontSize * 0.6 * labelText.length);
-
-                                    // Determine horizontal alignment
-                                    let labelX = w.x;
-                                    let espLabelAlign = "TextAlign::TOP_LEFT";
-                                    if (align.includes("CENTER")) {
-                                        // For center, we still left-align both but position them centered as a group
-                                        labelX = w.x;
-                                        espLabelAlign = "TextAlign::TOP_LEFT";
-                                    } else if (align.includes("RIGHT")) {
-                                        espLabelAlign = "TextAlign::TOP_RIGHT";
-                                        labelX = w.x + w.width;
-                                    }
-
+                                    // Use single printf to respect alignment logic simply
                                     lines.push(`          // label_value format: label and value on same line`);
-                                    lines.push(`          it.printf(${labelX}, ${w.y}, id(${labelFontId}), ${color}, ${espLabelAlign}, "${title}: %s", fullValue.c_str());`);
+                                    lines.push(`          it.printf(${alignX}, ${alignY}, id(${labelFontId}), ${color}, ${espAlign}, "${title}: %s", fullValue.c_str());`);
 
                                 } else if (valueFormat === "label_newline_value" && title) {
                                     // Label on first line, value on second line  
                                     const lineSpacing = labelFontSize + 2;
-                                    let espAlign = `TextAlign::${align}`;
-
-                                    // Get X position based on alignment
-                                    let xPos = w.x;
-                                    if (align.includes("CENTER")) {
-                                        xPos = w.x + Math.floor(w.width / 2);
-                                    } else if (align.includes("RIGHT")) {
-                                        xPos = w.x + w.width;
-                                    }
 
                                     lines.push(`          // label_newline_value format: label on line 1, value on line 2`);
-                                    lines.push(`          it.printf(${xPos}, ${w.y}, id(${labelFontId}), ${color}, ${espAlign}, "${title}");`);
-                                    lines.push(`          it.printf(${xPos}, ${w.y} + ${lineSpacing}, id(${valueFontId}), ${color}, ${espAlign}, "%s", fullValue.c_str());`);
+                                    lines.push(`          it.printf(${alignX}, ${alignY}, id(${labelFontId}), ${color}, ${espAlign}, "${title}");`);
+                                    lines.push(`          it.printf(${alignX}, ${alignY} + ${lineSpacing}, id(${valueFontId}), ${color}, ${espAlign}, "%s", fullValue.c_str());`);
 
                                 } else {
                                     // value_only or no title - just show the value
-                                    let espAlign = `TextAlign::${align}`;
-                                    let xPos = w.x;
-                                    if (align.includes("CENTER")) {
-                                        xPos = w.x + Math.floor(w.width / 2);
-                                    } else if (align.includes("RIGHT")) {
-                                        xPos = w.x + w.width;
-                                    }
-
-                                    lines.push(`          it.printf(${xPos}, ${w.y}, id(${valueFontId}), ${color}, ${espAlign}, "%s", fullValue.c_str());`);
+                                    lines.push(`          it.printf(${alignX}, ${alignY}, id(${valueFontId}), ${color}, ${espAlign}, "%s", fullValue.c_str());`);
                                 }
 
                                 lines.push(`        }`);
