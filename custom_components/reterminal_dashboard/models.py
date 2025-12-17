@@ -133,6 +133,9 @@ class PageConfig:
     # Optional per-page refresh interval (seconds).
     # If None, the global default is used in the generated YAML snippet.
     refresh_s: Optional[int] = None
+    # Per-page dark mode override: "inherit", "light", or "dark"
+    # If "inherit" or None, uses the global device dark_mode setting.
+    dark_mode: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         data: Dict[str, Any] = {
@@ -142,6 +145,8 @@ class PageConfig:
         }
         if self.refresh_s is not None:
             data["refresh_s"] = self.refresh_s
+        if self.dark_mode is not None:
+            data["dark_mode"] = self.dark_mode
         return data
 
     @staticmethod
@@ -191,12 +196,20 @@ class PageConfig:
         except (TypeError, ValueError):
             refresh_s = None
 
+        # Parse per-page dark mode setting
+        dark_mode_raw = data.get("dark_mode")
+        dark_mode: Optional[str] = None
+        if dark_mode_raw is not None and dark_mode_raw in ("inherit", "light", "dark"):
+            dark_mode = str(dark_mode_raw)
+
         return PageConfig(
             id=str(data.get("id", "page_0")),
             name=str(data.get("name", "Page")),
             widgets=widgets,
             refresh_s=refresh_s,
+            dark_mode=dark_mode,
         )
+
 
 
 @dataclass

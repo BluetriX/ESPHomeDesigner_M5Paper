@@ -53,12 +53,35 @@ class Canvas {
         this.canvas.style.width = `${dims.width}px`;
         this.canvas.style.height = `${dims.height}px`;
 
+        // Apply device shape (e.g. round)
+        const currentModel = (typeof getDeviceModel === 'function') ? getDeviceModel() : "reterminal_e1001";
+        const profile = (window.DEVICE_PROFILES && window.DEVICE_PROFILES[currentModel]) ? window.DEVICE_PROFILES[currentModel] : null;
+
+        if (profile && profile.shape === "round") {
+            this.canvas.style.borderRadius = "50%";
+            this.canvas.style.overflow = "hidden";
+            this.canvas.style.boxShadow = "0 0 0 10px rgba(0,0,0,0.1)"; // Optional: hint at the bezel
+        } else {
+            this.canvas.style.borderRadius = "0";
+            this.canvas.style.overflow = "visible";
+            this.canvas.style.boxShadow = "none";
+        }
+
         // Apply dark mode/theme
         if (AppState.settings.editor_light_mode) {
             this.canvas.classList.add("light-mode");
         } else {
             this.canvas.classList.remove("light-mode");
         }
+
+        // Apply black background mode for canvas preview (per-page overrides global)
+        const effectiveDarkMode = this.getEffectiveDarkMode();
+        if (effectiveDarkMode) {
+            this.canvas.classList.add("dark");
+        } else {
+            this.canvas.classList.remove("dark");
+        }
+
 
         if (!page) return;
 
@@ -99,6 +122,23 @@ class Canvas {
         }
     }
 
+    /**
+     * Determines the effective dark mode for the current page.
+     * Per-page setting overrides global setting.
+     * @returns {boolean} true if dark mode should be active
+     */
+    getEffectiveDarkMode() {
+        const page = AppState.getCurrentPage();
+        const pageDarkMode = page?.dark_mode;
+
+        // "inherit" or undefined = use global setting
+        // "dark" = force dark mode
+        // "light" = force light mode
+        if (pageDarkMode === "dark") return true;
+        if (pageDarkMode === "light") return false;
+        return !!AppState.settings.dark_mode;
+    }
+
     _addResizeHandle(el) {
         const handle = document.createElement("div");
         handle.className = "widget-resize-handle";
@@ -111,6 +151,7 @@ class Canvas {
 
         el.appendChild(handle);
     }
+
 
     _renderLegacyWidget(el, widget) {
         const type = widget.type;

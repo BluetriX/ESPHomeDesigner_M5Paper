@@ -3,9 +3,130 @@
 // on, EVENTS from events.js
 // getAvailableColors, getDeviceModel from device.js
 
+// ============================================================================
+// HELPER SCRIPTS
+// ============================================================================
+
+const CALENDAR_HELPER_SCRIPT = `# Dictionary to map calendar keys to their corresponding names
+# One word calandars don't need to be added calendar.jobs would map to Jobs by default without adding it here
+# calendar.hello_world should be added on the other hand
+CALENDAR_NAMES = {"calendar.x": "X", "calendar.Y": "Y"}
+# Day names (which are displayed in the calendar event list) can be translated here if required
+DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+# How many entries to send to the ESPHome device
+MAX_ENTRIES = 8
+
+def convert_calendar_format(data, today):
+    # Initialize a dictionary to store events grouped by date
+    events_by_date = {}
+    entrie_count = 0
+    
+    # Variable to store the end time of the closest event that will end
+    closest_end_time = None
+    
+    # Iterate through calendar keys and events
+    for calendar_key, events_list in data.items():
+        for event in events_list['events']:
+            if 'description' in event:
+                event.pop('description')
+                
+            # Attempt to split the 'event[start]' into date and time parts
+            parts = event['start'].split("T")
+            event_date = parts[0]
+            event_time = parts[1] if len(parts) > 1 else None  # event_time might not be present
+            
+            # Compare the event_date with today's date
+            if event_date < today:
+                # If the event's date is before today, update it to today's date (in case of multi day event starting before today)
+                event['start'] = today if event_time is None else f"{today}T{event_time}"
+                event_date = today
+            
+            # Add calendar name to event
+            # If calendar key exists in CALENDAR_NAMES, use its value, otherwise capitalize the second part of the key
+            event['calendar_name'] = CALENDAR_NAMES.get(calendar_key, calendar_key.split(".")[1].capitalize())
+            
+            # Parse location_name and location_address
+            if 'location' in event:
+                # Split the 'location' string into lines based on the newline character
+                location_lines = event['location'].split('\\n')
+                if len(location_lines) >= 2:
+                    # If there are at least two lines, consider the first line as 'location_name' and the second line as 'location_address'
+                    event['location_name'] = location_lines[0]
+                    # event['location_address'] = location_lines[1]
+                elif len(location_lines) == 1:
+                    # If there's only one line, consider it as 'location_name'
+                    event['location_name'] = location_lines[0]
+                    
+                # Remove the 'location' key from the event since it's been parsed into 'location_name' and 'location_address'
+                event.pop('location')
+                    
+            # Add event to events_by_date dictionary
+            if event_date in events_by_date:
+                events_by_date[event_date].append(event)
+            else:
+                events_by_date[event_date] = [event]
+                
+    # Sort events by date
+    sorted_dates = sorted(events_by_date.keys())
+    
+    # Initialize a list to store the final date objects
+    result = []
+    
+    # Iterate through sorted dates
+    for date in sorted_dates:
+        all_day_events = []
+        other_events = []
+        for event in events_by_date[date]:
+            if entrie_count == MAX_ENTRIES:
+                break
+            
+            # Check if the event lasts for the whole day
+            start_date = event['start']
+            end_date = event['end']
+            if 'T' not in event['start']:
+                all_day_events.append(event)
+            else:
+                other_events.append(event)
+                
+            entrie_count = entrie_count + 1
+        
+        if other_events and date == today:
+            closest_end_time = sorted(other_events, key=lambda item:dt_util.parse_datetime(item['end']), reverse=False)[0]["end"]
+        
+        if all_day_events or other_events:
+            # Sort other_events by start time
+            other_events.sort(key=lambda item:dt_util.parse_datetime(item['start']), reverse=False)
+            
+            # Construct dictionary for the date
+            # is_today cast to int because a bool somehow crashes my esphome config
+            day_item = {
+                'date': date,
+                'day': dt_util.parse_datetime(date).day,
+                'is_today': int(date == dt_util.now().isoformat().split("T")[0]),
+                'day_name': DAY_NAMES[dt_util.parse_datetime(date).weekday()],
+                'all_day': all_day_events,
+                'other': other_events
+            }
+            result.append(day_item)
+        
+    return (result, closest_end_time)
+
+# Access the data received from the Home Assistant service call
+input_data = data["calendar"]
+today = data["now"]
+
+# Convert the received data into the format expected by the epaper display
+converted_data = convert_calendar_format(input_data, today)
+
+# Pass the output back to Home Assistant
+output["entries"] = converted_data[0]
+output["closest_end_time"] = converted_data[1]
+`;
+
 class PropertiesPanel {
     constructor() {
         this.panel = document.getElementById("propertiesPanel");
+        this.lastRenderedWidgetId = null; // Track which widget was last rendered
         this.init();
     }
 
@@ -39,14 +160,24 @@ class PropertiesPanel {
     render() {
         if (!this.panel) return;
 
-        // Prevent re-rendering if user is typing in the panel
-        // This avoids losing focus/cursor position
-        if (this.panel.contains(document.activeElement)) {
+        // Get current selected widget ID
+        const currentWidgetId = AppState.selectedWidgetId;
+
+        // Check if the selected widget changed - if so, force re-render
+        const widgetChanged = this.lastRenderedWidgetId !== currentWidgetId;
+
+        // Prevent re-rendering if user is typing in the panel AND same widget
+        // This avoids losing focus/cursor position while editing the same widget
+        // But if the widget changed, we MUST re-render to show correct properties
+        if (!widgetChanged && this.panel.contains(document.activeElement)) {
             const tag = document.activeElement.tagName.toLowerCase();
             if (tag === "input" || tag === "textarea") {
                 return;
             }
         }
+
+        // Update tracking
+        this.lastRenderedWidgetId = currentWidgetId;
 
         this.panel.innerHTML = "";
         const widget = AppState.getSelectedWidget();
@@ -245,12 +376,23 @@ class PropertiesPanel {
                     this.autoPopulateTitleFromEntity(widget.id, v);
                 }
             }, widget);
+            // Text Sensor toggle (auto-detected when entity is selected)
+            this.addCheckbox("Text Sensor (string value)", props.is_text_sensor || false, (v) => updateProp("is_text_sensor", v));
+            this.addHint("Enable if entity returns text instead of numbers.");
+            this.addLabeledInputWithPicker("Secondary Entity ID", "text", widget.entity_id_2 || "", (v) => {
+                AppState.updateWidget(widget.id, { entity_id_2: v });
+            }, widget);
+            this.addLabeledInput("Separator", "text", props.separator || " ~ ", (v) => updateProp("separator", v));
             this.addLabeledInput("Title/Label", "text", widget.title || "", (v) => {
                 AppState.updateWidget(widget.id, { title: v });
             });
             this.addSelect("Display Format", props.value_format || "label_value", ["label_value", "label_newline_value", "value_only"], (v) => updateProp("value_format", v));
-            this.addLabeledInput("Precision", "number", props.precision !== undefined ? props.precision : -1, (v) => updateProp("precision", parseInt(v, 10)));
-            this.addLabeledInput("Unit", "text", props.unit || "", (v) => updateProp("unit", v));
+            this.addLabeledInput("Precision", "number", props.precision !== undefined ? props.precision : 2, (v) => updateProp("precision", parseInt(v, 10)));
+            this.addLabeledInputWithDataList("Prefix", "text", props.prefix || "", ["€", "$", "£", "¥", "CHF", "kr"], (v) => updateProp("prefix", v));
+            this.addLabeledInputWithDataList("Postfix", "text", props.postfix || "", [" kWh", " W", " V", " A", " °C", " %", " ppm", " lx"], (v) => updateProp("postfix", v));
+
+            this.addLabeledInput("Unit (Manual helper)", "text", props.unit || "", (v) => updateProp("unit", v));
+            this.addCheckbox("Hide default unit", props.hide_unit || false, (v) => updateProp("hide_unit", v));
             this.addLabeledInput("Label Size", "number", props.label_font_size || 14, (v) => updateProp("label_font_size", parseInt(v, 10)));
             this.addLabeledInput("Value Size", "number", props.value_font_size || 20, (v) => updateProp("value_font_size", parseInt(v, 10)));
             this.addSelect("Color", props.color || "black", colors, (v) => updateProp("color", v));
@@ -293,7 +435,7 @@ class PropertiesPanel {
             });
         }
         else if (type === "datetime") {
-            this.addSelect("Display Format", props.format || "time_date", ["time_date", "time_only", "date_only"], (v) => updateProp("format", v));
+            this.addSelect("Display Format", props.format || "time_date", ["time_date", "time_only", "date_only", "weekday_day_month"], (v) => updateProp("format", v));
             this.addLabeledInput("Time Font Size", "number", props.time_font_size || 28, (v) => updateProp("time_font_size", parseInt(v, 10)));
             this.addLabeledInput("Date Font Size", "number", props.date_font_size || 16, (v) => updateProp("date_font_size", parseInt(v, 10)));
             this.addSelect("Color", props.color || "black", colors, (v) => updateProp("color", v));
@@ -321,6 +463,14 @@ class PropertiesPanel {
             }
 
             this.addCheckbox("Italic", props.italic || false, (v) => updateProp("italic", v));
+
+            // Text Alignment
+            const alignOptions = [
+                "TOP_LEFT", "TOP_CENTER", "TOP_RIGHT",
+                "CENTER_LEFT", "CENTER", "CENTER_RIGHT",
+                "BOTTOM_LEFT", "BOTTOM_CENTER", "BOTTOM_RIGHT"
+            ];
+            this.addSelect("Align", props.text_align || "CENTER", alignOptions, (v) => updateProp("text_align", v));
         }
         else if (type === "progress_bar") {
             this.addLabeledInputWithPicker("Entity ID", "text", widget.entity_id || "", (v) => {
@@ -655,6 +805,44 @@ class PropertiesPanel {
             this.addHint("Automatically reduce font size if text is too long");
             this.addCheckbox("Italic Quote", props.italic_quote !== false, (v) => updateProp("italic_quote", v));
         }
+        else if (type === "calendar") {
+            this.addSectionLabel("Appearance");
+            this.addSelect("Text Color", props.text_color || "black", colors, (v) => updateProp("text_color", v));
+            this.addSelect("Border Color", props.border_color || "black", colors, (v) => updateProp("border_color", v));
+            this.addSelect("Background", props.background_color || "white", colors, (v) => updateProp("background_color", v));
+
+            this.addLabeledInput("Border Width", "number", props.border_width || 2, (v) => updateProp("border_width", parseInt(v, 10)));
+            this.addCheckbox("Show Border", props.show_border !== false, (v) => updateProp("show_border", v));
+
+            this.addSectionLabel("Font Sizes");
+            this.addLabeledInput("Big Date Size", "number", props.font_size_date || 100, (v) => updateProp("font_size_date", parseInt(v, 10)));
+            this.addLabeledInput("Day Name Size", "number", props.font_size_day || 24, (v) => updateProp("font_size_day", parseInt(v, 10)));
+            this.addLabeledInput("Grid Text Size", "number", props.font_size_grid || 14, (v) => updateProp("font_size_grid", parseInt(v, 10)));
+            this.addLabeledInput("Event Text Size", "number", props.font_size_event || 18, (v) => updateProp("font_size_event", parseInt(v, 10)));
+
+            this.addSectionLabel("Data");
+            this.addLabeledInputWithPicker("Entity ID", "text", widget.entity_id || "sensor.esp_calendar_data", (v) => {
+                AppState.updateWidget(widget.id, { entity_id: v });
+            }, widget);
+            this.addHint("Must be a sensor with attribute 'entries'");
+
+            // Helper Script Download
+            const dlBtn = document.createElement("button");
+            dlBtn.className = "btn btn-secondary btn-full";
+            dlBtn.textContent = "Download Helper Script";
+            dlBtn.style.marginTop = "10px";
+            dlBtn.addEventListener("click", () => {
+                const element = document.createElement('a');
+                element.setAttribute('href', 'data:text/x-python;charset=utf-8,' + encodeURIComponent(CALENDAR_HELPER_SCRIPT));
+                element.setAttribute('download', 'esp_calendar_data_conversion.py');
+                element.style.display = 'none';
+                document.body.appendChild(element);
+                element.click();
+                document.body.removeChild(element);
+            });
+            this.panel.appendChild(dlBtn);
+            this.addHint("Place in /config/python_scripts/");
+        }
         else if (type === "puppet") {
             this.addLabeledInput("File path / URL", "text", props.image_url || "", (v) => updateProp("image_url", v));
             this.addHint('Tip: Use mdi:icon-name for Material Design Icons. <br><b>Important:</b> Ensure `materialdesignicons-webfont.ttf` is in your ESPHome `fonts/` folder. <a href="https://pictogrammers.com/library/mdi/" target="_blank" style="color: #52c7ea">MDI Library</a>');
@@ -664,6 +852,224 @@ class PropertiesPanel {
 
             this.addSelect("Transparency", props.transparency || "opaque", ["opaque", "chroma_key", "alpha_channel"], (v) => updateProp("transparency", v));
             this.addHint("opaque=no transparency, chroma_key=color key, alpha_channel=smooth blend");
+        }
+        else if (type === "lvgl_button") {
+            this.addLabeledInputWithPicker("Action Entity ID", "text", widget.entity_id || "", (v) => {
+                AppState.updateWidget(widget.id, { entity_id: v });
+            }, widget);
+            this.addHint("Entity to toggle/trigger when clicked");
+
+            this.addLabeledInput("Text", "text", props.text || "BTN", (v) => updateProp("text", v));
+            this.addSelect("Background Color", props.bg_color || "white", colors, (v) => updateProp("bg_color", v));
+            this.addSelect("Text Color", props.color || "black", colors, (v) => updateProp("color", v));
+            this.addLabeledInput("Border Width", "number", props.border_width || 2, (v) => updateProp("border_width", parseInt(v, 10)));
+            this.addLabeledInput("Corner Radius", "number", props.radius || 5, (v) => updateProp("radius", parseInt(v, 10)));
+        }
+        else if (type === "lvgl_arc") {
+            this.addLabeledInputWithPicker("Sensor Entity ID", "text", widget.entity_id || "", (v) => {
+                AppState.updateWidget(widget.id, { entity_id: v });
+            }, widget);
+            this.addHint("Sensor to bind to arc value");
+
+            this.addLabeledInput("Title / Label", "text", props.title || "", (v) => {
+                const newProps = { ...widget.props, title: v };
+                AppState.updateWidget(widget.id, { props: newProps });
+            });
+
+            this.addLabeledInput("Min Value", "number", props.min || 0, (v) => updateProp("min", parseInt(v, 10)));
+            this.addLabeledInput("Max Value", "number", props.max || 100, (v) => updateProp("max", parseInt(v, 10)));
+            this.addLabeledInput("Default/Preview Value", "number", props.value || 0, (v) => updateProp("value", parseInt(v, 10)));
+
+            this.addLabeledInput("Thickness", "number", props.thickness || 10, (v) => updateProp("thickness", parseInt(v, 10)));
+            this.addSelect("Color", props.color || "blue", colors, (v) => updateProp("color", v));
+        }
+        else if (type === "lvgl_chart") {
+            this.addLabeledInputWithPicker("Entity ID", "text", widget.entity_id || "", (v) => {
+                AppState.updateWidget(widget.id, { entity_id: v });
+            }, widget);
+            this.addLabeledInput("Title", "text", props.title || "", (v) => updateProp("title", v));
+            this.addSelect("Type", props.type || "LINE", ["LINE", "SCATTER", "BAR"], (v) => updateProp("type", v));
+            this.addLabeledInput("Min Value", "number", props.min || 0, (v) => updateProp("min", parseInt(v, 10)));
+            this.addLabeledInput("Max Value", "number", props.max || 100, (v) => updateProp("max", parseInt(v, 10)));
+            this.addSelect("Color", props.color || "black", colors, (v) => updateProp("color", v));
+        }
+        else if (type === "lvgl_img") {
+            this.addLabeledInput("Source (Image/Symbol)", "text", props.src || "", (v) => updateProp("src", v));
+            this.addHint("e.g. symbol_ok, symbol_home, or /image.png");
+
+            this.addLabeledInput("Rotation (0.1 deg)", "number", props.rotation || 0, (v) => updateProp("rotation", parseInt(v, 10)));
+            this.addLabeledInput("Scale (256 = 1x)", "number", props.scale || 256, (v) => updateProp("scale", parseInt(v, 10)));
+            this.addSelect("Color (Tint)", props.color || "black", colors, (v) => updateProp("color", v));
+        }
+        else if (type === "lvgl_qrcode") {
+            this.addLabeledInput("Content / URL", "text", props.text || "", (v) => updateProp("text", v));
+            this.addLabeledInput("Size (px)", "number", props.size || 100, (v) => updateProp("size", parseInt(v, 10)));
+            this.addSelect("Color", props.color || "black", colors, (v) => updateProp("color", v));
+            this.addSelect("Background Color", props.bg_color || "white", colors, (v) => updateProp("bg_color", v));
+        }
+        else if (type === "lvgl_bar") {
+            this.addLabeledInputWithPicker("Entity ID", "text", widget.entity_id || "", (v) => {
+                AppState.updateWidget(widget.id, { entity_id: v });
+            }, widget);
+
+            this.addLabeledInput("Min Value", "number", props.min || 0, (v) => updateProp("min", parseInt(v, 10)));
+            this.addLabeledInput("Max Value", "number", props.max || 100, (v) => updateProp("max", parseInt(v, 10)));
+            this.addLabeledInput("Preview Value", "number", props.value || 50, (v) => updateProp("value", parseInt(v, 10)));
+
+            this.addSelect("Bar Color", props.color || "black", colors, (v) => updateProp("color", v));
+            this.addSelect("Background Color", props.bg_color || "gray", colors, (v) => updateProp("bg_color", v));
+            this.addCheckbox("Range Mode", props.range_mode || false, (v) => updateProp("range_mode", v));
+        }
+        else if (type === "lvgl_slider") {
+            this.addLabeledInputWithPicker("Entity ID", "text", widget.entity_id || "", (v) => {
+                AppState.updateWidget(widget.id, { entity_id: v });
+            }, widget);
+            this.addHint("Controls this entity number/level");
+
+            this.addLabeledInput("Min Value", "number", props.min || 0, (v) => updateProp("min", parseInt(v, 10)));
+            this.addLabeledInput("Max Value", "number", props.max || 100, (v) => updateProp("max", parseInt(v, 10)));
+            this.addLabeledInput("Preview Value", "number", props.value || 30, (v) => updateProp("value", parseInt(v, 10)));
+
+            this.addSelect("Knob/Bar Color", props.color || "black", colors, (v) => updateProp("color", v));
+            this.addSelect("Track Color", props.bg_color || "gray", colors, (v) => updateProp("bg_color", v));
+            this.addLabeledInput("Border Width", "number", props.border_width || 2, (v) => updateProp("border_width", parseInt(v, 10)));
+        }
+        else if (type === "calendar") {
+            this.addHint("📅 Displays a monthly calendar and agenda.");
+            this.addHint("⚠️ Requires 'esp_calendar_data_conversion.py' setup in Home Assistant.");
+
+            this.addLabeledInputWithPicker("Data Entity ID", "text", widget.props.entity_id || "sensor.esp_calendar_data", (v) => {
+                const newProps = { ...widget.props, entity_id: v };
+                AppState.updateWidget(widget.id, { props: newProps });
+            }, widget);
+
+            this.addSectionLabel("Appearance");
+            this.addCheckbox("Show Border", props.show_border !== false, (v) => updateProp("show_border", v));
+            this.addLabeledInput("Border Width", "number", props.border_width || 2, (v) => updateProp("border_width", parseInt(v, 10)));
+            this.addSelect("Border Color", props.border_color || "black", colors, (v) => updateProp("border_color", v));
+            this.addSelect("Background Color", props.background_color || "white", colors, (v) => updateProp("background_color", v));
+            this.addSelect("Text Color", props.text_color || "black", colors, (v) => updateProp("text_color", v));
+
+            this.addSectionLabel("Font Sizes");
+            this.addLabeledInput("Big Date Size", "number", props.font_size_date || 100, (v) => updateProp("font_size_date", parseInt(v, 10)));
+            this.addLabeledInput("Day Name Size", "number", props.font_size_day || 24, (v) => updateProp("font_size_day", parseInt(v, 10)));
+            this.addLabeledInput("Grid Text Size", "number", props.font_size_grid || 14, (v) => updateProp("font_size_grid", parseInt(v, 10)));
+            this.addLabeledInput("Event Text Size", "number", props.font_size_event || 18, (v) => updateProp("font_size_event", parseInt(v, 10)));
+
+            // Add "Download Helper Script" button
+            const container = this.panel; // Or create a sub-container
+            const downloadBtn = document.createElement("button");
+            downloadBtn.className = "action-btn"; // Assuming this class exists or button basic style
+            downloadBtn.style.marginTop = "15px";
+            downloadBtn.style.width = "100%";
+            downloadBtn.style.cursor = "pointer";
+            downloadBtn.style.padding = "8px";
+            downloadBtn.innerHTML = "📥 Download Helper Script";
+
+            downloadBtn.onclick = () => {
+                const blob = new Blob([CALENDAR_HELPER_SCRIPT], { type: "text/x-python" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "esp_calendar_data_conversion.py";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+            container.appendChild(downloadBtn);
+
+            const note = document.createElement("div");
+            note.style.marginTop = "5px";
+            note.style.fontSize = "10px";
+            note.style.color = "#888";
+            note.style.textAlign = "center";
+            note.innerText = "Check widget instructions for HA setup.";
+            container.appendChild(note);
+        }
+        else if (type === "lvgl_tabview") {
+            this.addLabeledInput("Tabs (comma separated)", "text", (props.tabs || []).join(", "), (v) => {
+                const tabs = v.split(",").map(t => t.trim()).filter(t => t);
+                updateProp("tabs", tabs);
+            });
+            this.addSelect("Background Color", props.bg_color || "white", colors, (v) => updateProp("bg_color", v));
+        }
+        else if (type === "lvgl_tileview") {
+            this.addHint("Tiles are currently configured via YAML or advanced properties.");
+            this.addSelect("Background Color", props.bg_color || "white", colors, (v) => updateProp("bg_color", v));
+        }
+        else if (type === "lvgl_led") {
+            this.addSelect("Color", props.color || "red", colors, (v) => updateProp("color", v));
+            this.addLabeledInput("Brightness (0-255)", "number", props.brightness || 255, (v) => updateProp("brightness", parseInt(v, 10)));
+        }
+        else if (type === "lvgl_spinner") {
+            this.addLabeledInput("Spin Time (ms)", "number", props.spin_time || 1000, (v) => updateProp("spin_time", parseInt(v, 10)));
+            this.addLabeledInput("Arc Length (deg)", "number", props.arc_length || 60, (v) => updateProp("arc_length", parseInt(v, 10)));
+            this.addSelect("Arc Color", props.arc_color || "blue", colors, (v) => updateProp("arc_color", v));
+            this.addSelect("Track Color", props.track_color || "white", colors, (v) => updateProp("track_color", v));
+        }
+        else if (type === "lvgl_buttonmatrix") {
+            this.addHint("Edit rows via YAML or simple comma-separated lists per row.");
+            // Simple editor: Row 1, Row 2...
+            const rows = props.rows || [];
+            // Just a placeholder for now
+        }
+        else if (type === "lvgl_checkbox") {
+            this.addLabeledInputWithPicker("Entity ID", "text", widget.entity_id || "", (v) => {
+                AppState.updateWidget(widget.id, { entity_id: v });
+            }, widget);
+            this.addHint("Toggle input_boolean when tapped");
+
+            this.addLabeledInput("Label", "text", props.text || "Checkbox", (v) => updateProp("text", v));
+            this.addCheckbox("Checked", props.checked || false, (v) => updateProp("checked", v));
+            this.addSelect("Color", props.color || "blue", colors, (v) => updateProp("color", v));
+        }
+        else if (type === "lvgl_dropdown") {
+            this.addLabeledInput("Options (one per line)", "textarea", props.options || "", (v) => updateProp("options", v));
+            this.addLabeledInput("Selected Index", "number", props.selected_index || 0, (v) => updateProp("selected_index", parseInt(v, 10)));
+            this.addSelect("Color", props.color || "white", colors, (v) => updateProp("color", v));
+        }
+        else if (type === "lvgl_keyboard") {
+            this.addSelect("Mode", props.mode || "TEXT_UPPER", ["TEXT_LOWER", "TEXT_UPPER", "SPECIAL", "NUMBER"], (v) => updateProp("mode", v));
+            this.addLabeledInput("Textarea ID Link", "text", props.textarea_id || "", (v) => updateProp("textarea_id", v));
+        }
+        else if (type === "lvgl_roller") {
+            this.addLabeledInput("Options (one per line)", "textarea", props.options || "", (v) => updateProp("options", v));
+            this.addLabeledInput("Visible Rows", "number", props.visible_row_count || 3, (v) => updateProp("visible_row_count", parseInt(v, 10)));
+            this.addSelect("Color", props.color || "white", colors, (v) => updateProp("color", v));
+            this.addSelect("Background Color", props.bg_color || "black", colors, (v) => updateProp("bg_color", v));
+            this.addSelect("Selected BG Color", props.selected_bg_color || "blue", colors, (v) => updateProp("selected_bg_color", v));
+            this.addSelect("Selected Text Color", props.selected_text_color || "white", colors, (v) => updateProp("selected_text_color", v));
+        }
+        else if (type === "lvgl_spinbox") {
+            this.addLabeledInput("Min", "number", props.min || 0, (v) => updateProp("min", parseInt(v, 10)));
+            this.addLabeledInput("Max", "number", props.max || 100, (v) => updateProp("max", parseInt(v, 10)));
+            this.addLabeledInput("Value", "number", props.value || 0, (v) => updateProp("value", parseInt(v, 10)));
+            this.addLabeledInput("Digits", "number", props.digit_count || 4, (v) => updateProp("digit_count", parseInt(v, 10)));
+            this.addLabeledInput("Step", "number", props.step || 1, (v) => updateProp("step", parseInt(v, 10)));
+        }
+        else if (type === "lvgl_switch") {
+            this.addLabeledInputWithPicker("Entity ID", "text", widget.entity_id || "", (v) => {
+                AppState.updateWidget(widget.id, { entity_id: v });
+            }, widget);
+            this.addHint("Toggle switch/light/input_boolean when tapped");
+
+            this.addCheckbox("Checked", props.checked || false, (v) => updateProp("checked", v));
+            this.addSelect("Indicator Color", props.color || "blue", colors, (v) => updateProp("color", v));
+            this.addSelect("Background Color", props.bg_color || "gray", colors, (v) => updateProp("bg_color", v));
+            this.addSelect("Knob Color", props.knob_color || "white", colors, (v) => updateProp("knob_color", v));
+        }
+        else if (type === "lvgl_textarea") {
+            this.addLabeledInput("Placeholder", "text", props.placeholder || "", (v) => updateProp("placeholder", v));
+            this.addLabeledInput("Text", "text", props.text || "", (v) => updateProp("text", v));
+            this.addCheckbox("One Line", props.one_line || false, (v) => updateProp("one_line", v));
+            this.addLabeledInput("Max Length", "number", props.max_length || 0, (v) => updateProp("max_length", parseInt(v, 10)));
+        }
+        else if (type === "lvgl_obj") {
+            this.addSelect("Color", props.color || "white", colors, (v) => updateProp("color", v));
+            this.addLabeledInput("Border Width", "number", props.border_width || 1, (v) => updateProp("border_width", parseInt(v, 10)));
+            this.addSelect("Border Color", props.border_color || "gray", colors, (v) => updateProp("border_color", v));
+            this.addLabeledInput("Radius", "number", props.radius || 0, (v) => updateProp("radius", parseInt(v, 10)));
         }
     }
 
@@ -740,6 +1146,37 @@ class PropertiesPanel {
         hint.style.marginBottom = "8px";
         hint.innerHTML = htmlContent;
         this.panel.appendChild(hint);
+    }
+
+    addLabeledInputWithDataList(label, type, value, suggestions, onChange) {
+        const wrap = document.createElement("div");
+        wrap.className = "field";
+        const lbl = document.createElement("div");
+        lbl.className = "prop-label";
+        lbl.textContent = label;
+
+        const listId = "datalist_" + Math.random().toString(36).substr(2, 9);
+        const dataList = document.createElement("datalist");
+        dataList.id = listId;
+        suggestions.forEach(s => {
+            const opt = document.createElement("option");
+            opt.value = s;
+            dataList.appendChild(opt);
+        });
+
+        const input = document.createElement("input");
+        input.className = "prop-input";
+        input.type = type;
+        input.value = value;
+        input.setAttribute("list", listId);
+        // Handle both input (typing) and change (selection)
+        input.addEventListener("input", () => onChange(input.value));
+        input.addEventListener("change", () => onChange(input.value));
+
+        wrap.appendChild(lbl);
+        wrap.appendChild(input);
+        wrap.appendChild(dataList);
+        this.panel.appendChild(wrap);
     }
 
     addSectionLabel(text) {
