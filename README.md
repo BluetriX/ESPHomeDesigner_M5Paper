@@ -1,16 +1,16 @@
-<div align="center">
-
 # ESPHome Designer
 
 **A visual drag-and-drop editor for ESPHome displays (E-Ink, OLED, LCD, Touch), running right inside Home Assistant.**
 
-<a href="#">
-  <img src="screenshots/Reterminal_Designer_v05.gif" alt="Watch the video">
-</a>
-<br>
-<small>Click to watch the demo video</small>
 
-<br>
+
+<div align="center">
+  <a href="https://youtu.be/bzCbiUypN_4">
+    <img src="screenshots/Reterminal_Designer_v05.gif" alt="Watch the video">
+  </a>
+  <br>
+  <small>Click to watch the demo video</small>
+</div>
 
 **No more hand-coding ESPHome display lambdas! 🎉**
 
