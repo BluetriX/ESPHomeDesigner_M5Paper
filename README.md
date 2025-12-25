@@ -227,10 +227,13 @@ The workflow is safe and deterministic - same layout always produces the same YA
 ## Hardware Support
 
 **Currently Supported:**
-- **Seeed Studio**: reTerminal E1001 (BW), reTerminal E1002 (Color), Trmnl DIY Kit (S3)
-- **Waveshare**: PhotoPainter (7-Color), Touch LCD 4.3" & 7.0" (S3)
-- **M5Stack**: M5Paper (Touch), M5Stack CoreInk
-- **TRMNL**: Original ESP32-C3 e-paper device
+- **Seeed Studio**: [reTerminal E1001](https://www.seeedstudio.com/reTerminal-E1001-p-6534.html?utm_source=Olivier&utm_medium=github&utm_id=developer) (BW), [reTerminal E1002](https://www.seeedstudio.com/reTerminal-E1002-p-6533.html?utm_source=Olivier&utm_medium=github&utm_id=developer) (Color), [TRMNL 7.5'' OG DIY Kit](https://www.seeedstudio.com/TRMNL-7-5-Inch-OG-DIY-Kit-p-6481.html?utm_source=Olivier&utm_medium=github&utm_id=developer) (S3)
+- **Waveshare**: [PhotoPainter](https://www.waveshare.com/esp32-s3-photopainter.htm) (7-Color)
+- **M5Stack**: [M5Paper](https://docs.m5stack.com/en/core/m5paper_v1.1) (Touch), [M5Stack M5Core Ink](https://docs.m5stack.com/en/core/coreink)
+- **TRMNL**: Original [ESP32-C3 e-paper device](https://shop.usetrmnl.com/collections/devices/products/trmnl)
+
+> [!IMPORTANT]
+> All devices not explicitly listed above are **untested** and may require troubleshooting.
 
 **Hardware Features Exposed:**
 - 3 physical buttons (GPIO 3/4/5)
