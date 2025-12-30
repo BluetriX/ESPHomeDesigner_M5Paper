@@ -1588,6 +1588,7 @@ async function generateSnippetLocally() {
 
                 const op = w.condition_operator || "==";
                 const state = (w.condition_state || "").trim();
+                const stateLower = state.toLowerCase();
                 const minVal = w.condition_min;
                 const maxVal = w.condition_max;
 
@@ -1606,17 +1607,28 @@ async function generateSnippetLocally() {
                     if (ent.startsWith("text_sensor.")) {
                         cond = `${valExpr} ${op} "${state}"`;
                     } else if (ent.startsWith("binary_sensor.")) {
-                        const isTrue = state.toLowerCase() === "on" || state.toLowerCase() === "true" || state === "1";
-                        // For equality, we just use the value or negated value.
+                        // Expanded HA Binary Sensor States
+                        const positiveStates = ["on", "true", "1", "open", "locked", "home", "occupied", "active", "detected"];
+                        const isPositive = positiveStates.includes(stateLower);
+
                         if (op === "==") {
-                            cond = isTrue ? valExpr : `!${valExpr}`;
+                            cond = isPositive ? valExpr : `!${valExpr}`;
+                        } else if (op === "!=") {
+                            cond = isPositive ? `!${valExpr}` : valExpr;
                         } else {
-                            // op is !=
-                            cond = isTrue ? `!${valExpr}` : valExpr;
+                            // For binary sensors, other operators make less sense but we'll treat them as numeric 0/1
+                            cond = `(int)${valExpr} ${op} ${isPositive ? 1 : 0}`;
                         }
                     } else {
                         // Numeric
-                        const numVal = parseFloat(state);
+                        let numVal = parseFloat(state);
+
+                        // Smart fallback for numeric sensors using binary labels (common for imported sensors without prefix)
+                        if (isNaN(numVal)) {
+                            if (["on", "true", "open", "locked", "home", "occupied", "active", "detected"].includes(stateLower)) numVal = 1;
+                            else if (["off", "false", "closed", "unlocked", "not_home", "clear", "inactive", "idle"].includes(stateLower)) numVal = 0;
+                        }
+
                         cond = `${valExpr} ${op} ${isNaN(numVal) ? 0 : numVal}`;
                     }
                 } else if (op === "range") {
@@ -2793,7 +2805,7 @@ async function generateSnippetLocally() {
                             lines.push(`                          const char* start = event["start"] | "";`);
                             lines.push(``);
                             lines.push(`                          it.printf(${w.x} + 20, y_cursor, id(${fontEventDay}), ${color}, TextAlign::TOP_LEFT, "%d", currentDayNum);`);
-                            lines.push(`                          it.printf(${w.x} + 60, y_cursor + 4, id(${fontEvent}), ${color}, TextAlign::TOP_LEFT, "%.15s...", summary);`);
+                            lines.push(`                          it.printf(${w.x} + 60, y_cursor + 4, id(${fontEvent}), ${color}, TextAlign::TOP_LEFT, "%.25s", summary);`);
                             lines.push(``);
                             lines.push(`                          if (is_all_day) {`);
                             lines.push(`                              it.printf(${w.x} + ${w.width} - 20, y_cursor + 4, id(${fontEvent}), ${color}, TextAlign::TOP_RIGHT, "All Day");`);

@@ -1855,7 +1855,13 @@ class PropertiesPanel {
             AppState.updateWidget(widget.id, { condition_operator: v });
         });
 
-        this.addLabeledInput("Condition State", "text", widget.condition_state, (v) => {
+        const commonStates = [
+            "on", "off", "open", "closed",
+            "true", "false", "home", "not_home",
+            "locked", "unlocked", "active", "inactive",
+            "detected", "clear", "occupied"
+        ];
+        this.addLabeledInputWithDataList("Condition State", "text", widget.condition_state, commonStates, (v) => {
             AppState.updateWidget(widget.id, { condition_state: v });
         });
 
