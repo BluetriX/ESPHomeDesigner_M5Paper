@@ -1,6 +1,14 @@
 # Release Notes
 
 
+## v0.8.5.1 - Hotfix: Calendar & Build Environment
+
+**Release Date:** January 1, 2026
+
+### 🐛 Bug Fixes
+- **Calendar Widget Compiler Errors**: Fixed C++ compilation errors (`return-statement with a value`) and deprecated warnings (`containsKey`) in the Calendar widget. The generation logic was corrected in both the modular feature file and the main `yaml_export.js`.
+- **ESP-IDF Environment Tip**: Added a helpful tip to the generated YAML header recommending `framework: version: 5.4.2` for ESP32-S3 devices. This prevents build failures caused by auto-updates to bleeding-edge ESP-IDF versions (like 5.5.1) which may have broken Python environments.
+
 ## v0.8.5 - Round Displays & Hardware Expansion
 
 **Release Date:** December 29, 2025
