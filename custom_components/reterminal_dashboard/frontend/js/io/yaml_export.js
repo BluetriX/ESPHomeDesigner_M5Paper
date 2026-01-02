@@ -1597,8 +1597,10 @@ async function generateSnippetLocally() {
             // Now display is dynamic.
 
             // We'll insert the lambda header at insertIdx, and increment insertIdx so the content follows.
-            lines.splice(insertIdx, 0, "    lambda: |-");
-            insertIdx++; // Start inserting content after this line
+            if (!useLVGL) {
+                lines.splice(insertIdx, 0, "    lambda: |-");
+                insertIdx++; // Start inserting content after this line
+            }
         } else {
             // Fallback: if display block not found? This shouldn't happen.
         }
@@ -2093,10 +2095,28 @@ async function generateSnippetLocally() {
                                 } else if ((valueFormat === "label_newline_value" || valueFormat === "label_newline_value_no_unit") && title) {
                                     // Label on first line, value on second line  
                                     const lineSpacing = labelFontSize + 2;
+                                    const totalHeight = labelFontSize + 2 + valueFontSize;
+
+                                    // Calculate groupStartY based on vertical alignment
+                                    let groupStartY;
+                                    if (align.includes("BOTTOM")) {
+                                        groupStartY = `${w.y} + ${w.height} - ${totalHeight}`;
+                                    } else if (align.includes("TOP")) {
+                                        groupStartY = `${w.y}`;
+                                    } else {
+                                        // CENTER (default) - center the entire group
+                                        groupStartY = `${w.y} + (${w.height} - ${totalHeight}) / 2`;
+                                    }
+
+                                    // Use TOP_* alignment for drawing since we computed Y
+                                    let hAlign = "CENTER";
+                                    if (align.includes("LEFT")) hAlign = "LEFT";
+                                    else if (align.includes("RIGHT")) hAlign = "RIGHT";
+                                    const drawAlign = `TextAlign::TOP_${hAlign}`;
 
                                     lines.push(`          // label_newline_value format: label on line 1, value on line 2`);
-                                    lines.push(`          it.printf(${alignX}, ${alignY}, id(${labelFontId}), ${color}, ${espAlign}, "${title}");`);
-                                    lines.push(`          it.printf(${alignX}, ${alignY} + ${lineSpacing}, id(${valueFontId}), ${color}, ${espAlign}, "%s", fullValue.c_str());`);
+                                    lines.push(`          it.printf(${alignX}, ${groupStartY}, id(${labelFontId}), ${color}, ${drawAlign}, "${title}");`);
+                                    lines.push(`          it.printf(${alignX}, ${groupStartY} + ${lineSpacing}, id(${valueFontId}), ${color}, ${drawAlign}, "%s", fullValue.c_str());`);
                                     if (colorProp.toLowerCase() === "gray" || colorProp.toLowerCase() === "grey") {
                                         lines.push(`          apply_grey_dither_mask(${w.x}, ${w.y + TEXT_Y_OFFSET}, ${w.width}, ${w.height});`);
                                     }
@@ -2119,11 +2139,15 @@ async function generateSnippetLocally() {
                             const colorProp = p.color || "black";
                             const color = getColorConst(colorProp);
                             const fontRef = addFont("Material Design Icons", 400, size);
-                            lines.push(`        // widget:icon id:${w.id} type:icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} code:${code} size:${size} color:${colorProp} ${getCondProps(w)}`);
+                            const iconAlign = p.text_align || "TOP_LEFT";
+                            const iconAlignX = getAlignX(iconAlign, w.x, w.width);
+                            const iconAlignY = getAlignY(iconAlign, w.y, w.height);
+                            const espIconAlign = `TextAlign::${iconAlign}`;
+                            lines.push(`        // widget:icon id:${w.id} type:icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} code:${code} size:${size} color:${colorProp} text_align:${iconAlign} ${getCondProps(w)}`);
                             const cond = getConditionCheck(w);
                             if (cond) lines.push(`        ${cond}`);
                             // Use printf for icons to handle unicode safely
-                            lines.push(`        it.printf(${w.x}, ${w.y}, id(${fontRef}), ${color}, "%s", "\\U000${code}");`);
+                            lines.push(`        it.printf(${iconAlignX}, ${iconAlignY}, id(${fontRef}), ${color}, ${espIconAlign}, "%s", "\\U000${code}");`);
                             // Apply grey dithering if color is gray
                             if (colorProp.toLowerCase() === "gray") {
                                 lines.push(`        apply_grey_dither_mask(${w.x}, ${w.y}, ${size}, ${size});`);
@@ -3275,62 +3299,64 @@ async function generateSnippetLocally() {
                             const borderColorProp = p.border_color || colorProp;
                             const color = getColorConst(colorProp);
                             const borderColor = getColorConst(borderColorProp);
-                            const isGray = colorProp.toLowerCase() === "gray";
-                            const rectY = w.y + RECT_Y_OFFSET;
-                            lines.push(`        // widget:shape_rect id:${w.id} type:shape_rect x:${w.x} y:${w.y} w:${w.width} h:${w.height} fill:${fill} border:${borderWidth} color:${colorProp} border_color:${borderColorProp} ${getCondProps(w)}`);
+                            const isFillGray = colorProp.toLowerCase() === "gray";
+                            const isBorderGray = borderColorProp.toLowerCase() === "gray";
+                            const rectY = Math.floor(w.y + RECT_Y_OFFSET);
+                            const rectX = Math.floor(w.x);
+                            const rectW = Math.floor(w.width);
+                            const rectH = Math.floor(w.height);
+
+                            lines.push(`        // widget:shape_rect id:${w.id} type:shape_rect x:${rectX} y:${Math.floor(w.y)} w:${rectW} h:${rectH} fill:${fill} border:${borderWidth} color:${colorProp} border_color:${borderColorProp} ${getCondProps(w)}`);
                             const condSRect = getConditionCheck(w);
                             if (condSRect) lines.push(`        ${condSRect}`);
+
                             if (fill) {
-                                if (isGray) {
-                                    lines.push(`        apply_grey_dither_mask(${w.x}, ${rectY}, ${w.width}, ${w.height});`);
-                                } else {
-                                    lines.push(`        it.filled_rectangle(${w.x}, ${rectY}, ${w.width}, ${w.height}, ${color});`);
-                                }
-                            } else {
+                                lines.push(`        it.filled_rectangle(${rectX}, ${rectY}, ${rectW}, ${rectH}, ${color});`);
+                            }
+
+                            if (borderWidth > 0) {
                                 lines.push(`        for (int i = 0; i < ${borderWidth}; i++) {`);
-                                lines.push(`          it.rectangle(${w.x} + i, ${rectY} + i, ${w.width} - 2 * i, ${w.height} - 2 * i, ${borderColor});`);
+                                lines.push(`          it.rectangle(${rectX} + i, ${rectY} + i, ${rectW} - 2 * i, ${rectH} - 2 * i, ${borderColor});`);
                                 lines.push(`        }`);
                             }
-                            if (borderColorProp.toLowerCase() === "gray" && !fill) {
-                                lines.push(`        apply_grey_dither_mask(${w.x}, ${rectY}, ${w.width}, ${w.height});`);
+
+                            if (isEpaper && ((fill && isFillGray) || (borderWidth > 0 && isBorderGray))) {
+                                lines.push(`        apply_grey_dither_mask(${rectX}, ${rectY}, ${rectW}, ${rectH});`);
                             }
+
                             if (condSRect) lines.push(`        }`);
 
                         } else if (t === "shape_circle") {
-                            const r = Math.min(w.width, w.height) / 2;
-                            const cx = w.x + w.width / 2;
-                            const cy = w.y + w.height / 2 + RECT_Y_OFFSET;
+                            const r = Math.floor(Math.min(w.width, w.height) / 2);
+                            const cx = Math.floor(w.x + w.width / 2);
+                            const cy = Math.floor(w.y + w.height / 2 + RECT_Y_OFFSET);
                             const fill = !!p.fill;
                             const borderWidth = parseInt(p.border_width || 1, 10);
                             const colorProp = p.color || "black";
                             const borderColorProp = p.border_color || colorProp;
                             const color = getColorConst(colorProp);
                             const borderColor = getColorConst(borderColorProp);
-                            const isGray = colorProp.toLowerCase() === "gray";
-                            lines.push(`        // widget:shape_circle id:${w.id} type:shape_circle x:${w.x} y:${w.y} w:${w.width} h:${w.height} fill:${fill} border:${borderWidth} color:${colorProp} border_color:${borderColorProp} ${getCondProps(w)}`);
+                            const isFillGray = colorProp.toLowerCase() === "gray";
+                            const isBorderGray = borderColorProp.toLowerCase() === "gray";
+
+                            lines.push(`        // widget:shape_circle id:${w.id} type:shape_circle x:${Math.floor(w.x)} y:${Math.floor(w.y)} w:${Math.floor(w.width)} h:${Math.floor(w.height)} fill:${fill} border:${borderWidth} color:${colorProp} border_color:${borderColorProp} ${getCondProps(w)}`);
                             const condSCircle = getConditionCheck(w);
                             if (condSCircle) lines.push(`        ${condSCircle}`);
+
                             if (fill) {
-                                if (isGray) {
-                                    // circle dither
-                                    const circleY = w.y + RECT_Y_OFFSET;
-                                    lines.push(`        it.filled_circle(${cx}, ${cy}, ${r}, ${color});`);
-                                    if (isEpaper) {
-                                        lines.push(`        apply_grey_dither_mask(${w.x}, ${circleY}, ${w.width}, ${w.height});`);
-                                    }
-                                } else {
-                                    lines.push(`        it.filled_circle(${cx}, ${cy}, ${r}, ${color});`);
-                                }
-                            } else {
+                                lines.push(`        it.filled_circle(${cx}, ${cy}, ${r}, ${color});`);
+                            }
+
+                            if (borderWidth > 0) {
                                 lines.push(`        for (int i = 0; i < ${borderWidth}; i++) {`);
                                 lines.push(`          it.circle(${cx}, ${cy}, ${r} - i, ${borderColor});`);
                                 lines.push(`        }`);
                             }
-                            if (borderColorProp.toLowerCase() === "gray" && !fill) {
-                                if (isEpaper) {
-                                    lines.push(`        apply_grey_dither_mask(${w.x}, ${w.y + RECT_Y_OFFSET}, ${w.width}, ${w.height});`);
-                                }
+
+                            if (isEpaper && ((fill && isFillGray) || (borderWidth > 0 && isBorderGray))) {
+                                lines.push(`        apply_grey_dither_mask(${Math.floor(w.x)}, ${Math.floor(w.y + RECT_Y_OFFSET)}, ${Math.floor(w.width)}, ${Math.floor(w.height)});`);
                             }
+
                             if (condSCircle) lines.push(`        }`);
 
                         } else if (t === "datetime") {
@@ -3352,7 +3378,7 @@ async function generateSnippetLocally() {
                             lines.push(`        {`);
                             lines.push(`          auto now = id(ha_time).now();`);
 
-                            // Determine horizontal alignment for X position and TextAlign
+                            // Determine horizontal alignment for X position
                             let hAlign = "CENTER";
                             if (align.includes("LEFT")) hAlign = "LEFT";
                             else if (align.includes("RIGHT")) hAlign = "RIGHT";
@@ -3360,15 +3386,35 @@ async function generateSnippetLocally() {
                             const espAlign = `TextAlign::TOP_${hAlign}`;
                             const xPos = getAlignX(align, w.x, w.width);
 
-                            if (format === "time_only") {
-                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${timeFontId}), ${color}, ${espAlign}, "%H:%M", now);`);
-                            } else if (format === "date_only") {
-                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${dateFontId}), ${color}, ${espAlign}, "%d.%m.%Y", now);`);
-                            } else if (format === "weekday_day_month") {
-                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${dateFontId}), ${color}, ${espAlign}, "%A %d %B", now);`);
+                            // Calculate total height and startY based on vertical alignment
+                            let totalHeight, startY;
+                            const isMultiLine = format === "time_date" || !format;
+                            if (isMultiLine) {
+                                totalHeight = timeSize + 2 + dateSize;
+                            } else if (format === "time_only") {
+                                totalHeight = timeSize;
                             } else {
-                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${timeFontId}), ${color}, ${espAlign}, "%H:%M", now);`);
-                                lines.push(`          it.strftime(${xPos}, ${w.y} + ${timeSize} + 2, id(${dateFontId}), ${color}, ${espAlign}, "%a, %b %d", now);`);
+                                totalHeight = dateSize;
+                            }
+
+                            if (align.includes("BOTTOM")) {
+                                startY = `${w.y} + ${w.height} - ${totalHeight}`;
+                            } else if (align.includes("TOP")) {
+                                startY = `${w.y}`;
+                            } else {
+                                // CENTER (default)
+                                startY = `${w.y} + (${w.height} - ${totalHeight}) / 2`;
+                            }
+
+                            if (format === "time_only") {
+                                lines.push(`          it.strftime(${xPos}, ${startY}, id(${timeFontId}), ${color}, ${espAlign}, "%H:%M", now);`);
+                            } else if (format === "date_only") {
+                                lines.push(`          it.strftime(${xPos}, ${startY}, id(${dateFontId}), ${color}, ${espAlign}, "%d.%m.%Y", now);`);
+                            } else if (format === "weekday_day_month") {
+                                lines.push(`          it.strftime(${xPos}, ${startY}, id(${dateFontId}), ${color}, ${espAlign}, "%A %d %B", now);`);
+                            } else {
+                                lines.push(`          it.strftime(${xPos}, ${startY}, id(${timeFontId}), ${color}, ${espAlign}, "%H:%M", now);`);
+                                lines.push(`          it.strftime(${xPos}, ${startY} + ${timeSize} + 2, id(${dateFontId}), ${color}, ${espAlign}, "%a, %b %d", now);`);
                             }
                             lines.push(`        }`);
                             if (condDT) lines.push(`        }`);
@@ -3425,7 +3471,7 @@ async function generateSnippetLocally() {
         // Determine how to apply the lambda: 
         // - For regular devices: splice into lines array
         // - For package-based devices: store for placeholder replacement
-        if (insertIdx !== -1) {
+        if (insertIdx !== -1 && !useLVGL) {
             lines.splice(insertIdx, 0, ...lambdaLines);
         }
 
@@ -3436,7 +3482,7 @@ async function generateSnippetLocally() {
             const hasImmediateHeader = /lambda:\s*\|-\s*[\r\n]+\s*# __LAMBDA_PLACEHOLDER__/.test(packageContent);
             const lambdaContent = (hasImmediateHeader ? "" : "lambda: |-\n") + lambdaLines.join("\n");
 
-            packageContent = packageContent.replace("# __LAMBDA_PLACEHOLDER__", lambdaContent);
+            packageContent = packageContent.replace(/^[ \t]*# __LAMBDA_PLACEHOLDER__/m, lambdaContent);
         }
     }
 
@@ -3496,7 +3542,12 @@ async function generateSnippetLocally() {
 
 function generateScriptSection(payload, pagesLocal, profile = {}) {
     const lines = [];
-    const displayId = profile.features?.lcd ? "my_display" : "epaper_display";
+    // Use my_display for: LCD devices, package-based recipes, or profiles with custom display_config
+    // These all define the display as "my_display" in their YAML
+    const displayId = (profile.features?.lcd || profile.isPackageBased || profile.display_config)
+        ? "my_display"
+        : "epaper_display";
+
 
     // Start the script section
     lines.push("script:");

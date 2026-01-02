@@ -107,7 +107,7 @@
         body.style.fontWeight = fontWeight;
         body.style.fontStyle = fontStyle;
 
-        if (format === "label_value" && title) {
+        if ((format === "label_value" || format === "label_value_no_unit") && title) {
             // Label and value on same line
             body.style.display = "flex";
             body.style.alignItems = "baseline";
@@ -132,7 +132,7 @@
 
             body.appendChild(labelSpan);
             body.appendChild(valueSpan);
-        } else if (format === "label_newline_value" && title) {
+        } else if ((format === "label_newline_value" || format === "label_newline_value_no_unit") && title) {
             // Label on one line, value on next line (column layout)
             body.style.display = "flex";
             body.style.flexDirection = "column";

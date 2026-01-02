@@ -48,6 +48,7 @@ window.DEVICE_PROFILES = {
       buzzer: true,
       buttons: true,
       sht4x: true,
+      epaper: true,
       inverted_colors: true
     }
   },

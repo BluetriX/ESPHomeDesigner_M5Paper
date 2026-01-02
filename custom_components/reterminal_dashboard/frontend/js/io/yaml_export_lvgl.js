@@ -27,8 +27,6 @@ function generateLVGLSnippet(pages, deviceModel) {
     if (profile.touch) {
         lines.push("  touchscreens:");
         lines.push("    - my_touchscreen");
-    } else {
-        lines.push("  touchscreens: []");
     }
     lines.push("");
 

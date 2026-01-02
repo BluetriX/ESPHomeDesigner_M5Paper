@@ -1,9 +1,7 @@
 # Release Notes
 
 
-<<<<<<< Updated upstream
-=======
-## v0.8.6.2 - Battery, WiFi & Waveshare Fixes
+## v0.8.6.2 - Battery, WiFi, Waveshare & LVGL Fixes
 
 **Release Date:** January 2, 2026
 
@@ -15,6 +13,10 @@
 - **Temperature Unit Toggle**: Added a choice between Celsius and Fahrenheit for `template_sensor_bar` and `ondevice_temperature` widgets. The canvas preview and exported ESPHome YAML now automatically handle the conversion formula `(C * 9/5) + 32` when Fahrenheit is selected.
 
 ### 🐛 Bug Fixes
+- **LVGL Lambda Conflict (#129)**: Resolved a critical issue where the generic display lambda was being injected into LVGL configurations, causing "Using lambda: or pages: in display config is not compatible with LVGL" errors. The system now correctly conditionally applies the lambda only for non-LVGL setups.
+- **Empty Touchscreens List**: Fixed an issue where `touchscreens: []` was generated when no touchscreens were present, causing YAML validation errors.
+- **Lambda Indentation (#122)**: Fixed a YAML syntax error where the first line of the display lambda in package-based hardware recipes had extra indentation, causing ESPHome compilation failures.
+- **Sensor Text Label Rendering**: Fixed an issue where the widget's label would not display in the web UI when using "Value Only" display formats (e.g., Label: Value Only). The rendering logic now correctly handles all format variants for the canvas preview.
 - **Waveshare 7" Touchscreen YAML Fix**: Resolved a critical "mapping values are not allowed here" error in exported YAML for Waveshare 7" LCD devices. The indentation of the touchscreen `transform` block was corrected from 4 spaces to 2 and an extra newline was removed, ensuring valid YAML syntax and successful ESPHome compilation.
 - **Unified ID Sanitization**: Standardized the ESPHome ID generation for all widgets to ensure consistent naming between sensors and display logic. This resolves an issue where the `battery_icon` and `wifi_signal` widgets would incorrectly strip the `sensor.` prefix, causing "Couldn't find ID" or `nan%` errors.
 - **Improved Sensor Robustness**: Enhanced C++ rendering logic for `battery_icon`, `wifi_signal`, and `template_sensor_bar` with explicit `has_state()` and `isnan()` checks. Invalid or missing sensor data now defaults gracefully to `0` or `--` instead of resulting in visual artifacts like `nan%`.
@@ -24,9 +26,14 @@
 - **Hotfix: Custom Recipe Caching**: Fixed a critical issue where updating a custom hardware recipe (YAML file) and re-importing it would not reflect changes due to browser caching. The system now bypasses caching when fetching hardware packages.
 - **Calendar Event Limit Persistence**: Fixed an issue where the "Event Limit" setting for the calendar widget would revert to its default value after updating the YAML configuration. The property is now correctly saved to and loaded from the ESPHome YAML.
 - **Temperature Unit Persistence**: Resolved an issue where the selected temperature unit would revert to Celsius after a YAML update. Added metadata comments and import parsing for `temperature_unit`, `unit`, and `precision` properties to ensure widget states are correctly restored.
+- **Missing Shape Borders**: Fixed a bug where `shape_circle` and `shape_rect` widgets would omit the border if a fill color was also applied. The generated C++ now correctly separates fill and border drawing operations.
+- **Integer Drawing Coordinates**: Updated shape rendering to use rounded integer coordinates (via `Math.floor`). This ensures valid C++ code for drawing functions and prevents visual artifacts or compilation warnings.
+- **reTerminal E1001 Dithering Fix**: Corrected the `reterminal_e1001` device profile to accurately flag it as an e-paper display. This fix enables the automatic gray dithering mask for icons and shapes, which was previously skipped for this device.
+- **Auto-Cycle Pages Fix**: Resolved an issue where auto-cycling pages would fail for package-based devices (like Waveshare e-paper) due to a display ID mismatch in generated scripts. Also updated e-paper hardware recipes to correctly initialize the cycling timer on boot.
+- **Waveshare 7" LCD Rotation**: Fixed the default `rotation` for the "Waveshare Touch LCD 7" profile. Changed from `90` to `0` to correctly align with the device's native landscape orientation.
+- **Component Alignment (#123)**: Fixed alignment issues for Icon, Datetime, and Sensor Text widgets. Icons now respect `text_align` property. Datetime and multi-line Sensor Text widgets now correctly center the entire text block vertically within widget bounds.
 
 
->>>>>>> Stashed changes
 ## v0.8.6 - Experimental: Custom Hardware Profiles
 
 **Release Date:** January 1, 2026

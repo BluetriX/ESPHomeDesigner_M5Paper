@@ -34,6 +34,11 @@
 
 esphome:
   min_version: 2024.11.0
+  on_boot:
+    priority: 600
+    then:
+      - delay: 2s
+      - script.execute: manage_run_and_sleep
   project:
     name: "Waveshare.ESP32-Universal-epaper-7.5v2"
     version: "1.0"
