@@ -32,6 +32,7 @@
 - **Auto-Cycle Pages Fix**: Resolved an issue where auto-cycling pages would fail for package-based devices (like Waveshare e-paper) due to a display ID mismatch in generated scripts. Also updated e-paper hardware recipes to correctly initialize the cycling timer on boot.
 - **Waveshare 7" LCD Rotation**: Fixed the default `rotation` for the "Waveshare Touch LCD 7" profile. Changed from `90` to `0` to correctly align with the device's native landscape orientation.
 - **Component Alignment (#123)**: Fixed alignment issues for Icon, Datetime, and Sensor Text widgets. Icons now respect `text_align` property. Datetime and multi-line Sensor Text widgets now correctly center the entire text block vertically within widget bounds.
+- **Sensor Text Unit Logic**: Fixed an issue where the unit was displayed twice in the preview (e.g., "123 W W") and added intelligent fallback logic to display the entity's friendly name if the label field is left empty.
 
 
 ## v0.8.6 - Experimental: Custom Hardware Profiles

@@ -171,9 +171,9 @@ text_sensor:
           char cal[7][7][3];
           get_calendar_matrix(time.year, time.month, cal);
           
-          int cell_width = (${w} - 40) / 7;
+          int cell_width = (${w} - 20) / 7;
           int cell_height = 18;
-          int start_x = ${x} + 20;
+          int start_x = ${x} + 10;
           
           for (int i = 0; i < 7; i++) {
               for (int j = 0; j < 7; j++) {
@@ -193,7 +193,7 @@ text_sensor:
                   }
               }
           }
-          it.line(start_x, calendar_y_pos + cell_height, ${x} + ${w} - 20, calendar_y_pos + cell_height, color_content);
+          it.line(start_x, calendar_y_pos + cell_height, ${x} + ${w} - 10, calendar_y_pos + cell_height, color_content);
           
           // 3. Events List from JSON
           // Requires built-in JSON support in ESPHome (json component)
@@ -230,7 +230,7 @@ text_sensor:
                   // Safety: Ensure we have enough space for at least one event
                   if (y_cursor >= max_y) { ESP_LOGW("calendar", "Widget too small for events"); return; }
 
-                  it.filled_rectangle(${x} + 20, y_cursor - 5, ${w} - 40, 2, color_content);
+                  it.filled_rectangle(${x} + 10, y_cursor - 5, ${w} - 20, 2, color_content);
  
                    int event_count = 0;
                    int event_limit = ${props.event_limit !== undefined ? props.event_limit : 2};
@@ -244,7 +244,7 @@ text_sensor:
                            const char* summary = event["summary"] | "No Title";
                            const char* start = event["start"] | "";
  
-                           it.printf(${x} + 20, y_cursor, id(font_event_day), color_content, TextAlign::TOP_LEFT, "%d", currentDayNum);
+                           it.printf(${x} + 10, y_cursor, id(font_event_day), color_content, TextAlign::TOP_LEFT, "%d", currentDayNum);
                            it.printf(${x} + 60, y_cursor + 4, id(font_event), color_content, TextAlign::TOP_LEFT, "%.25s", summary);
  
                            if (is_all_day) {

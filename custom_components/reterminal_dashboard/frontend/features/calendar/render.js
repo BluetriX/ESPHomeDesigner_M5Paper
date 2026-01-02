@@ -63,8 +63,8 @@
         const grid = document.createElement("div");
         grid.style.position = "absolute";
         grid.style.top = "122px";
-        grid.style.left = "20px";
-        grid.style.right = "20px";
+        grid.style.left = "10px";
+        grid.style.right = "10px";
         grid.style.display = "grid";
         grid.style.gridTemplateColumns = "repeat(7, 1fr)";
         grid.style.gap = "1px";
@@ -121,8 +121,8 @@
         const events = document.createElement("div");
         events.style.position = "absolute";
         events.style.top = "263px";
-        events.style.left = "20px";
-        events.style.right = "20px";
+        events.style.left = "10px";
+        events.style.right = "10px";
         events.style.fontSize = (props.font_size_event || 18) + "px";
         events.style.overflow = "hidden";
 
@@ -137,7 +137,7 @@
 
         let eventsHtml = "";
         for (let i = 0; i < Math.min(limit, mockData.length); i++) {
-            eventsHtml += `<div style="margin-bottom:4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><b>${mockData[i].day}</b> ${mockData[i].text}</div>`;
+            eventsHtml += `<div style="margin-bottom:4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="display:inline-block;width:30px;font-weight:bold;">${mockData[i].day}</span><span style="margin-left:20px;">${mockData[i].text}</span></div>`;
         }
         events.innerHTML = eventsHtml;
         el.appendChild(events);

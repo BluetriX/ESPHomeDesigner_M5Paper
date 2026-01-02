@@ -29,10 +29,12 @@
                     const strState = entityObj.formatted || String(entityObj.state);
                     const rawState = entityObj.state;
 
-                    const match = strState.match(/^([-+]?\d*\.?\d+)(.*)$/);
+                    // Robust Regex: Supports point or comma decimals
+                    const match = strState.match(/^([-+]?\d*[.,]?\d+)(.*)$/);
                     if (match) {
-                        const val = parseFloat(match[1]);
-                        const extractedUnit = match[2] || "";
+                        const val = parseFloat(match[1].replace(',', '.')); // Normalize comma
+                        const extractedUnit = match[2] ? match[2].trim() : "";
+
                         // Capture unit from first entity if not set manually, AND not hidden
                         if (eId === entityId && (unitProp === undefined || unitProp === "") && !props.hide_unit && !isNoUnit) {
                             displayUnit = extractedUnit;
@@ -41,12 +43,29 @@
                             if (!isNaN(precision) && precision >= 0) {
                                 return val.toFixed(precision);
                             }
-                            return val.toString();
+                            return val.toString(); // Return pure number string
                         }
                     }
                     // Fallback: update unit from attributes if needed
                     if (eId === entityId && (unitProp === undefined || unitProp === "") && entityObj.attributes && entityObj.attributes.unit_of_measurement && !props.hide_unit && !isNoUnit) {
                         displayUnit = entityObj.attributes.unit_of_measurement;
+                    }
+                    // For "no_unit" formats, ensure we strip any trailing unit from the value
+                    if (isNoUnit || props.hide_unit) {
+                        // Try to extract just the numeric part for no_unit formats
+                        const numMatch = strState.match(/^([-+]?\d*[.,]?\d+)/);
+                        if (numMatch) {
+                            const numVal = parseFloat(numMatch[1].replace(',', '.'));
+                            if (!isNaN(numVal)) {
+                                if (!isNaN(precision) && precision >= 0) {
+                                    return numVal.toFixed(precision);
+                                }
+                                return numVal.toString();
+                            }
+                        }
+                        // If we can't extract a number, return raw state (text sensor)
+                        // but strip any known unit pattern from the end
+                        return strState.replace(/\s*[°%]?[A-Za-z\/²³]+\s*$/, '').trim() || strState;
                     }
                     return strState;
                 }
@@ -64,6 +83,26 @@
         if (val2 !== null) {
             displayValue = `${val1}${separator}${val2}`;
         }
+
+        // Fix for Double Unit: If displayValue ALREADY ends with the unit, don't append it again
+        if (displayUnit && displayValue.endsWith(displayUnit)) {
+            displayUnit = "";
+        }
+
+        // Fix for Missing Label: Fallback to friendly_name if title is empty but label is requested
+        let effectiveTitle = title;
+        if (!effectiveTitle && (format.startsWith("label_") || format === "value_label")) {
+            // Try to get friendly name
+            if (window.AppState && window.AppState.entityStates && entityId) {
+                const eObj = window.AppState.entityStates[entityId];
+                if (eObj && eObj.attributes && eObj.attributes.friendly_name) {
+                    effectiveTitle = eObj.attributes.friendly_name;
+                } else {
+                    effectiveTitle = entityId; // Last resort
+                }
+            }
+        }
+
 
         const prefix = props.prefix || "";
         const postfix = props.postfix || "";
@@ -107,7 +146,7 @@
         body.style.fontWeight = fontWeight;
         body.style.fontStyle = fontStyle;
 
-        if ((format === "label_value" || format === "label_value_no_unit") && title) {
+        if ((format === "label_value" || format === "label_value_no_unit") && effectiveTitle) {
             // Label and value on same line
             body.style.display = "flex";
             body.style.alignItems = "baseline";
@@ -115,7 +154,7 @@
 
             const labelSpan = document.createElement("span");
             labelSpan.style.fontSize = `${labelFontSize}px`;
-            labelSpan.textContent = title + ":";
+            labelSpan.textContent = effectiveTitle + ":";
 
             const valueSpan = document.createElement("span");
             valueSpan.style.fontSize = `${valueFontSize}px`;
@@ -132,7 +171,7 @@
 
             body.appendChild(labelSpan);
             body.appendChild(valueSpan);
-        } else if ((format === "label_newline_value" || format === "label_newline_value_no_unit") && title) {
+        } else if ((format === "label_newline_value" || format === "label_newline_value_no_unit") && effectiveTitle) {
             // Label on one line, value on next line (column layout)
             body.style.display = "flex";
             body.style.flexDirection = "column";
@@ -141,7 +180,7 @@
 
             const labelDiv = document.createElement("div");
             labelDiv.style.fontSize = `${labelFontSize}px`;
-            labelDiv.textContent = title;
+            labelDiv.textContent = effectiveTitle;
             applyAlign(props.label_align || props.text_align || "TOP_LEFT", labelDiv);
 
             const valueDiv = document.createElement("div");
@@ -151,7 +190,7 @@
 
             body.appendChild(labelDiv);
             body.appendChild(valueDiv);
-        } else if (format === "value_label" && title) {
+        } else if (format === "value_label" && effectiveTitle) {
             // Value first, then label
             body.style.display = "flex";
             body.style.alignItems = "baseline";
@@ -163,13 +202,13 @@
 
             const labelSpan = document.createElement("span");
             labelSpan.style.fontSize = `${labelFontSize}px`;
-            labelSpan.textContent = title;
+            labelSpan.textContent = effectiveTitle;
 
             body.appendChild(valueSpan);
             body.appendChild(labelSpan);
         } else if (format === "label_only") {
             body.style.fontSize = `${labelFontSize}px`;
-            body.textContent = title;
+            body.textContent = effectiveTitle;
             applyAlign(props.text_align || "TOP_LEFT", body);
         } else {
             // value_only, value_only_no_unit or default

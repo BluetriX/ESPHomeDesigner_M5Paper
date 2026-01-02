@@ -3,7 +3,9 @@
         const props = widget.props || {};
         const { getColorStyle } = helpers;
 
-        const label = props.title || "";
+        // Title and entity_id are stored at widget level, not in props
+        const label = widget.title || props.title || "";
+        const entityId = widget.entity_id || "";
         const valueFormat = props.value_format || "label_value";
         const labelFontSize = parseInt(props.label_font_size || 14, 10);
         const valueFontSize = parseInt(props.value_font_size || 20, 10);
@@ -14,15 +16,22 @@
         const color = props.color || "black";
         const colorStyle = getColorStyle(color);
 
+        // Check if this is a "no unit" format variant
+        const isNoUnit = valueFormat && valueFormat.endsWith("_no_unit");
+        const hideUnit = props.hide_unit === true;
+
         // Mock value for preview
         let displayValue = "123.4";
         if (precision >= 0) {
             displayValue = parseFloat(displayValue).toFixed(precision);
         }
-        if (unit) {
-            displayValue += unit;
-        } else if (props.entity_id && props.entity_id.includes("temperature")) {
-            displayValue += "°C";
+        // Only add unit if NOT a "no_unit" format AND hide_unit is false
+        if (!isNoUnit && !hideUnit) {
+            if (unit) {
+                displayValue += unit;
+            } else if (entityId && entityId.includes("temperature")) {
+                displayValue += "°C";
+            }
         }
 
         element.style.display = "flex";
@@ -46,7 +55,7 @@
 
         element.innerHTML = "";
 
-        if (valueFormat === "label_newline_value" && label) {
+        if ((valueFormat === "label_newline_value" || valueFormat === "label_newline_value_no_unit") && label) {
             const container = document.createElement("div");
             container.style.display = "flex";
             container.style.flexDirection = "column";
@@ -65,7 +74,7 @@
             container.appendChild(labelDiv);
             container.appendChild(valueDiv);
             element.appendChild(container);
-        } else if (valueFormat === "label_value" && label) {
+        } else if ((valueFormat === "label_value" || valueFormat === "label_value_no_unit") && label) {
             const div = document.createElement("div");
             div.style.fontSize = valueFontSize + "px";
             div.style.textAlign = getTextAlign(valueAlign);
@@ -73,7 +82,7 @@
             div.textContent = `${label}: ${displayValue}`;
             element.appendChild(div);
         } else {
-            // value_only or no label
+            // value_only, value_only_no_unit, or no label
             const div = document.createElement("div");
             div.style.fontSize = valueFontSize + "px";
             div.style.textAlign = getTextAlign(valueAlign);

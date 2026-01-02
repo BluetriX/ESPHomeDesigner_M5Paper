@@ -25,8 +25,7 @@ async function fetchHardwarePackage(url) {
     }
 
     try {
-        // FIX: Prevent browser caching of hardware profiles (User Report: Custom recipes not updating)
-        const response = await fetch(url, { cache: "no-store" });
+        const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return await response.text();
     } catch (e) {
@@ -68,7 +67,7 @@ function sanitizePackageContent(yamlContent) {
     const lines = yamlContent.split('\n');
     const sanitizedLines = [];
     const systemKeys = [
-        "esphome:", "esp32:", "esp8266:", "rp2040:", "libretiny:", "wifi:", "api:", "ota:", "logger:",
+        "esphome:", "esp32:", "wifi:", "api:", "ota:", "logger:",
         "web_server:", "captive_portal:", "platformio_options:", "preferences:",
         "substitutions:" // Often handled in main config
     ];
@@ -279,8 +278,6 @@ async function generateSnippetLocally() {
             lines.push("#         - Framework: esp-idf (Recommended) or arduino");
         } else {
             lines.push("#         - Select: ESP32-S3 (or appropriate for your board)");
-            lines.push("#         - Framework: esp-idf");
-            lines.push("#           (TIP: For ESPHome 2025.12+, set version: 5.4.2 to avoid build errors)");
         }
         lines.push("#");
         lines.push("# ============================================================================");
@@ -560,8 +557,6 @@ async function generateSnippetLocally() {
     const processedSensorIds = new Set(); // For numeric sensors
     const processedTextSensorEntities = new Set(); // For text sensors
     const haTextSensorLines = []; // For text_sensor HA imports
-    const processedBinarySensorEntities = new Set(); // For binary sensors
-    const binarySensorLines = []; // For binary_sensor HA imports
 
     pagesLocal.forEach(p => {
         if (!p.widgets) return;
@@ -706,59 +701,6 @@ async function generateSnippetLocally() {
                 }
             }
 
-            // --- CONDITION ENTITIES ---
-            // If widget has a visibility condition based on an external HA entity,
-            // we must ensure that entity is imported into ESPHome.
-            const condEnt = (w.condition_entity || "").trim();
-            if (condEnt && !condEnt.startsWith("weather.")) {
-                const safeId = condEnt.replace(/[^a-zA-Z0-9_]/g, "_");
-
-                // Determine if it's a text sensor or binary sensor
-                let isText = condEnt.startsWith("text_sensor.");
-                const isBinary = condEnt.startsWith("binary_sensor.");
-
-                // Implicit Text Sensor Detection: 
-                // If condition state is a non-numeric string and not a boolean keyword, assume it's a text sensor.
-                if (!isText && !isBinary && (w.condition_operator !== "range")) {
-                    const cState = (w.condition_state || "").trim().toLowerCase();
-                    const numeric = parseFloat(cState);
-                    const booleanKeywords = ["on", "off", "true", "false", "open", "closed", "locked", "unlocked", "home", "not_home", "occupied", "clear", "active", "inactive", "detected", "idle"];
-
-                    if (w.condition_state && isNaN(numeric) && !booleanKeywords.includes(cState)) {
-                        isText = true;
-                    }
-                }
-
-                if (isText) {
-                    if (!processedTextSensorEntities.has(condEnt)) {
-                        processedTextSensorEntities.add(condEnt);
-                        haTextSensorLines.push(`  - platform: homeassistant`);
-                        // Ensure ID is unique and valid
-                        // If implicit, we still use _txt suffix to distinguish from potential numeric version
-                        haTextSensorLines.push(`    id: ${safeId}_txt`);
-                        haTextSensorLines.push(`    entity_id: ${condEnt}`);
-                        haTextSensorLines.push(`    internal: true`);
-                    }
-                } else if (isBinary) {
-                    if (!processedBinarySensorEntities.has(condEnt)) {
-                        processedBinarySensorEntities.add(condEnt);
-                        binarySensorLines.push(`  - platform: homeassistant`);
-                        binarySensorLines.push(`    id: ${safeId}_bin`);
-                        binarySensorLines.push(`    entity_id: ${condEnt}`);
-                        binarySensorLines.push(`    internal: true`);
-                    }
-                } else {
-                    // Numeric / Generic
-                    if (!processedSensorIds.has(condEnt)) {
-                        processedSensorIds.add(condEnt);
-                        widgetSensorLines.push(`  - platform: homeassistant`);
-                        widgetSensorLines.push(`    id: ${safeId}`);
-                        widgetSensorLines.push(`    entity_id: ${condEnt}`);
-                        widgetSensorLines.push(`    internal: true`);
-                    }
-                }
-            }
-
         });
     });
 
@@ -826,18 +768,8 @@ async function generateSnippetLocally() {
 
 
 
-    // 7. Binary Sensors (Buttons + Touch Areas + HA Condition Entities)
-    const binarySensors = generateBinarySensorSection(profile, pagesLocal.length, displayId, touchAreaWidgets);
-    if (binarySensors.length > 0) {
-        if (binarySensorLines.length > 0) {
-            binarySensors.push(...binarySensorLines);
-        }
-        lines.push(...binarySensors);
-    } else if (binarySensorLines.length > 0) {
-        lines.push("binary_sensor:");
-        lines.push(...binarySensorLines);
-        lines.push("");
-    }
+    // 7. Binary Sensors (Buttons + Touch Areas)
+    lines.push(...generateBinarySensorSection(profile, pagesLocal.length, displayId, touchAreaWidgets));
 
     // 8. Buttons (Page Navigation Templates)
     lines.push(...generateButtonSection(profile, pagesLocal.length, displayId));
@@ -1212,63 +1144,6 @@ async function generateSnippetLocally() {
         lines.push("");
     }
 
-    // Insert Quote Widget Interval/Fetch Logic
-    if (quoteRssWidgets.length > 0) {
-        lines.push("interval:");
-        quoteRssWidgets.forEach(w => {
-            const p = w.props || {};
-            const refreshInterval = p.refresh_interval || "1h";
-            const quoteTextId = `quote_text_${w.id}`.replace(/-/g, "_");
-            const quoteAuthorId = `quote_author_${w.id}`.replace(/-/g, "_");
-            const showAuthor = p.show_author !== false;
-            const random = p.random !== false;
-            const feedUrl = p.feed_url || "https://www.brainyquote.com/link/quotebr.rss";
-
-            // Build the URL with the random parameter if enabled
-            // The RSS proxy endpoint is used to bypass CORS and handle SSL if needed
-            // Defaulting to homeassistant.local:8123 as per previous working versions
-            const proxyUrl = `http://homeassistant.local:8123/api/reterminal_dashboard/rss_proxy?url=${encodeURIComponent(feedUrl)}${random ? '&random=true' : ''}`;
-
-            lines.push(`  # Quote widget: ${w.id}`);
-            lines.push(`  - interval: ${refreshInterval}`);
-            lines.push(`    startup_delay: 30s`);
-            lines.push(`    then:`);
-            lines.push(`      - if:`);
-            lines.push(`          condition:`);
-            lines.push(`            wifi.connected:`);
-            lines.push(`          then:`);
-            lines.push(`            - http_request.get:`);
-            lines.push(`                url: "${proxyUrl}"`);
-            lines.push(`                capture_response: true`);
-            lines.push(`                on_response:`);
-            lines.push(`                  - lambda: |-`);
-            lines.push(`                      if (response->status_code == 200) {`);
-            lines.push(`                        DynamicJsonDocument doc(4096);`);
-            lines.push(`                        DeserializationError error = deserializeJson(doc, body);`);
-            lines.push(`                        if (error) {`);
-            lines.push(`                          ESP_LOGW("quote", "Failed to parse JSON: %s", error.c_str());`);
-            lines.push(`                          return;`);
-            lines.push(`                        }`);
-            lines.push(`                        if (doc.containsKey("success") && doc["success"].as<bool>()) {`);
-            lines.push(`                          JsonObject quote = doc["quote"];`);
-            lines.push(`                          if (!quote.isNull()) {`);
-            lines.push(`                            std::string q_text = quote["quote"].as<std::string>();`);
-            lines.push(`                            std::string q_author = quote["author"].as<std::string>();`);
-            lines.push(`                            id(${quoteTextId}_global) = q_text;`);
-            if (showAuthor) {
-                lines.push(`                            id(${quoteAuthorId}_global) = q_author;`);
-            }
-            lines.push(`                            ESP_LOGI("quote", "Fetched quote: %s", q_text.c_str());`);
-            lines.push(`                          }`);
-            lines.push(`                        }`);
-            lines.push(`                        id(${displayId}).update();`); // Force screen refresh
-            lines.push(`                      } else {`);
-            lines.push(`                        ESP_LOGW("quote", "HTTP Request failed with code: %d", response->status_code);`);
-            lines.push(`                      }`);
-        });
-        lines.push("");
-    }
-
     if (calendarWidgets.length > 0) {
         lines.push("# ============================================================================");
         lines.push("# CALENDAR WIDGET SETUP");
@@ -1438,7 +1313,7 @@ async function generateSnippetLocally() {
     // - Currency: € (U+20AC), £ (U+00A3), ¥ (U+00A5)
     // - General: © (U+00A9), ® (U+00AE), ™ (U+2122)
     // - Arrows: ←↑→↓ (U+2190-2193)
-    const EXTENDED_GLYPHS_ARRAY = [
+    const EXTENDED_GLYPHS = [
         // Basic Latin (ASCII)
         ...Array.from({ length: 95 }, (_, i) => `\\U000000${(i + 32).toString(16).padStart(2, '0')}`), // 0x20-0x7E
         "\\U000000B0", // Degree °
@@ -1457,7 +1332,7 @@ async function generateSnippetLocally() {
         "\\U000020AC", // Euro €
         "\\U00002122", // Trademark ™
         // Arrows removed as they are missing in Roboto (U+2190-U+2193)
-    ];
+    ].map(g => `"${g}"`).join(", "); // Quote each glyph properly
 
     const addFont = (family, weight, size, italic = false) => {
         const safeFamily = family.replace(/\s+/g, "_").toLowerCase();
@@ -1507,15 +1382,7 @@ async function generateSnippetLocally() {
                 } else {
                     // Default: Add extended glyphs to ensure units and standard symbols work
                     // Note: We inject raw string list directly, assuming ESPHome parser handles it
-                    let glyphs = [...EXTENDED_GLYPHS_ARRAY];
-
-                    // ISSUE #105: Playfair Display does not support the Micro Sign (U+00B5)
-                    if (family === "Playfair Display") {
-                        glyphs = glyphs.filter(g => g !== "\\U000000B5");
-                    }
-
-                    const glyphList = glyphs.map(g => `"${g}"`).join(", ");
-                    fontLines.push(`    glyphs: [${glyphList}]`);
+                    fontLines.push(`    glyphs: [${EXTENDED_GLYPHS}]`);
                 }
             }
         }
@@ -1597,10 +1464,8 @@ async function generateSnippetLocally() {
             // Now display is dynamic.
 
             // We'll insert the lambda header at insertIdx, and increment insertIdx so the content follows.
-            if (!useLVGL) {
-                lines.splice(insertIdx, 0, "    lambda: |-");
-                insertIdx++; // Start inserting content after this line
-            }
+            lines.splice(insertIdx, 0, "    lambda: |-");
+            insertIdx++; // Start inserting content after this line
         } else {
             // Fallback: if display block not found? This shouldn't happen.
         }
@@ -1622,15 +1487,6 @@ async function generateSnippetLocally() {
             const getColorConst = (c) => {
                 if (!c) return "COLOR_BLACK";
                 const cl = c.toLowerCase();
-
-                // Handle Hex Colors (#RRGGBB)
-                if (cl.startsWith("#") && cl.length === 7) {
-                    const r = parseInt(cl.substring(1, 3), 16);
-                    const g = parseInt(cl.substring(3, 5), 16);
-                    const b = parseInt(cl.substring(5, 7), 16);
-                    return `Color(${r}, ${g}, ${b})`;
-                }
-
                 if (cl === "white") return "COLOR_WHITE";
                 if (cl === "black") return "COLOR_BLACK";
                 if (cl === "gray" || cl === "grey") return "COLOR_BLACK"; // Dithered later
@@ -1655,90 +1511,8 @@ async function generateSnippetLocally() {
 
             // Generate valid condition checks
             const getCondProps = (w) => {
-                // Return shorthand metadata for YAML re-import
-                if (!w.condition_entity) return "";
-                let s = ` cond_ent:"${w.condition_entity}" cond_op:"${w.condition_operator || "=="}"`;
-                if (w.condition_state) s += ` cond_state:"${w.condition_state}"`;
-                if (w.condition_min) s += ` cond_min:"${w.condition_min}"`;
-                if (w.condition_max) s += ` cond_max:"${w.condition_max}"`;
-                return s;
-            };
-
-            /**
-             * Generates a C++ if block for conditional visibility.
-             */
-            const getConditionCheck = (w) => {
-                const ent = (w.condition_entity || "").trim();
-                if (!ent) return "";
-
-                const op = w.condition_operator || "==";
-                const state = (w.condition_state || "").trim();
-                const stateLower = state.toLowerCase();
-                const minVal = w.condition_min;
-                const maxVal = w.condition_max;
-
-                const safeId = ent.replace(/[^a-zA-Z0-9_]/g, "_");
-
-                // Determine sensor type/source
-                const isTextExplicit = ent.startsWith("text_sensor.");
-                const isBinary = ent.startsWith("binary_sensor.");
-                let isText = isTextExplicit;
-
-                // Implicit Text Sensor Detection
-                if (!isText && !isBinary && op !== "range") {
-                    const numeric = parseFloat(state);
-                    const booleanKeywords = ["on", "off", "true", "false", "open", "closed", "locked", "unlocked", "home", "not_home", "occupied", "clear", "active", "inactive", "detected", "idle"];
-                    if (state && isNaN(numeric) && !booleanKeywords.includes(stateLower)) {
-                        isText = true;
-                    }
-                }
-
-                let valExpr = `id(${safeId}).state`;
-                if (isText) {
-                    // Check if we treated it as text sensor in import section (which adds _txt suffix)
-                    // Yes, if we detected it as text, we used _txt suffix
-                    valExpr = `id(${safeId}_txt).state`;
-                } else if (isBinary) {
-                    valExpr = `id(${safeId}_bin).state`;
-                }
-
-                let cond = "";
-                if (op === "==" || op === "!=" || op === ">" || op === "<" || op === ">=" || op === "<=") {
-                    if (isText) {
-                        cond = `${valExpr} ${op} "${state}"`;
-                    } else if (ent.startsWith("binary_sensor.")) {
-                        // Expanded HA Binary Sensor States
-                        const positiveStates = ["on", "true", "1", "open", "locked", "home", "occupied", "active", "detected"];
-                        const isPositive = positiveStates.includes(stateLower);
-
-                        if (op === "==") {
-                            cond = isPositive ? valExpr : `!${valExpr}`;
-                        } else if (op === "!=") {
-                            cond = isPositive ? `!${valExpr}` : valExpr;
-                        } else {
-                            // For binary sensors, other operators make less sense but we'll treat them as numeric 0/1
-                            cond = `(int)${valExpr} ${op} ${isPositive ? 1 : 0}`;
-                        }
-                    } else {
-                        // Numeric
-                        let numVal = parseFloat(state);
-
-                        // Smart fallback for numeric sensors using binary labels (common for imported sensors without prefix)
-                        if (isNaN(numVal)) {
-                            if (["on", "true", "open", "locked", "home", "occupied", "active", "detected"].includes(stateLower)) numVal = 1;
-                            else if (["off", "false", "closed", "unlocked", "not_home", "clear", "inactive", "idle"].includes(stateLower)) numVal = 0;
-                        }
-
-                        cond = `${valExpr} ${op} ${isNaN(numVal) ? 0 : numVal}`;
-                    }
-                } else if (op === "range") {
-                    const minNum = parseFloat(minVal);
-                    const maxNum = parseFloat(maxVal);
-                    cond = `${valExpr} >= ${isNaN(minNum) ? 0 : minNum} && ${valExpr} <= ${isNaN(maxNum) ? 100 : maxNum}`;
-                }
-
-                if (!cond) return "";
-                return `if (${cond}) {`;
+                // Placeholder for conditional visibility if needed
+                return "";
             };
 
             const RECT_Y_OFFSET = 0;
@@ -1965,13 +1739,10 @@ async function generateSnippetLocally() {
                             const align = p.text_align || "TOP_LEFT";
 
                             lines.push(`        // widget:text id:${w.id} type:text x:${w.x} y:${w.y} w:${w.width} h:${w.height} text:"${text}" font_family:"${family}" font_size:${size} font_weight:${weight} italic:${italic} color:${colorProp} text_align:${align} ${getCondProps(w)}`);
-                            const cond = getConditionCheck(w);
-                            if (cond) lines.push(`        ${cond}`);
                             lines.push(`        it.printf(${alignX}, ${alignY}, id(${fontId}), ${color}, ${espAlign}, "${text}");`);
                             if (colorProp.toLowerCase() === "gray" || colorProp.toLowerCase() === "grey") {
                                 lines.push(`        apply_grey_dither_mask(${w.x}, ${w.y + TEXT_Y_OFFSET}, ${w.width}, ${w.height});`);
                             }
-                            if (cond) lines.push(`        }`);
 
                         } else if (t === "sensor_text") {
                             // Read all properties correctly
@@ -2009,10 +1780,7 @@ async function generateSnippetLocally() {
                             const valueFontId = addFont(family, weight, valueFontSize, italic);
 
                             // Widget metadata comment - include all properties for round-trip persistence
-                            lines.push(`        // widget:sensor_text id:${w.id} type:sensor_text x:${w.x} y:${w.y} w:${w.width} h:${w.height} ent:${entity} entity_2:${entity2} title:"${title}" format:${valueFormat} label_font:${labelFontSize} value_font:${valueFontSize} color:${colorProp} label_align:${align} value_align:${align} precision:${precision} unit:"${unit}" hide_unit:${!!p.hide_unit} prefix:"${prefix}" postfix:"${postfix}" separator:"${separator}" local:${isLocalSensor} text_sensor:${isTextSensor} font_family:"${family}" font_weight:${weight} italic:${italic} ${getCondProps(w)}`);
-
-                            const cond = getConditionCheck(w);
-                            if (cond) lines.push(`        ${cond}`);
+                            lines.push(`        // widget:sensor_text id:${w.id} type:sensor_text x:${w.x} y:${w.y} w:${w.width} h:${w.height} ent:${entity} entity_2:${entity2} title:"${title}" format:${valueFormat} label_font:${labelFontSize} value_font:${valueFontSize} color:${colorProp} label_align:${align} value_align:${align} precision:${precision} unit:"${unit}" hide_unit:${!!p.hide_unit} prefix:"${prefix}" postfix:"${postfix}" separator:"${separator}" local:${isLocalSensor} text_sensor:${isTextSensor} font_family:"${family}" font_weight:${weight} italic:${italic}`);
 
                             // Calculate alignment coordinates including Vertical alignment
                             const alignY = getAlignY(align, w.y, w.height);
@@ -2075,12 +1843,7 @@ async function generateSnippetLocally() {
                                 }
 
                                 // Build full display value with prefix, unit, postfix
-                                lines.push(`          // Ensure space before unit if unit is not empty and doesn't already start with a space`);
-                                let unitWithSpace = displayUnit;
-                                if (unitWithSpace && !unitWithSpace.startsWith(" ")) {
-                                    unitWithSpace = " " + unitWithSpace;
-                                }
-                                lines.push(`          std::string fullValue = "${prefix}" + sensorValue + "${unitWithSpace}" + "${postfix}";`);
+                                lines.push(`          std::string fullValue = "${prefix}" + sensorValue + "${displayUnit}" + "${postfix}";`);
 
                                 // Render based on value_format
                                 if ((valueFormat === "label_value" || valueFormat === "label_value_no_unit") && title) {
@@ -2095,28 +1858,10 @@ async function generateSnippetLocally() {
                                 } else if ((valueFormat === "label_newline_value" || valueFormat === "label_newline_value_no_unit") && title) {
                                     // Label on first line, value on second line  
                                     const lineSpacing = labelFontSize + 2;
-                                    const totalHeight = labelFontSize + 2 + valueFontSize;
-
-                                    // Calculate groupStartY based on vertical alignment
-                                    let groupStartY;
-                                    if (align.includes("BOTTOM")) {
-                                        groupStartY = `${w.y} + ${w.height} - ${totalHeight}`;
-                                    } else if (align.includes("TOP")) {
-                                        groupStartY = `${w.y}`;
-                                    } else {
-                                        // CENTER (default) - center the entire group
-                                        groupStartY = `${w.y} + (${w.height} - ${totalHeight}) / 2`;
-                                    }
-
-                                    // Use TOP_* alignment for drawing since we computed Y
-                                    let hAlign = "CENTER";
-                                    if (align.includes("LEFT")) hAlign = "LEFT";
-                                    else if (align.includes("RIGHT")) hAlign = "RIGHT";
-                                    const drawAlign = `TextAlign::TOP_${hAlign}`;
 
                                     lines.push(`          // label_newline_value format: label on line 1, value on line 2`);
-                                    lines.push(`          it.printf(${alignX}, ${groupStartY}, id(${labelFontId}), ${color}, ${drawAlign}, "${title}");`);
-                                    lines.push(`          it.printf(${alignX}, ${groupStartY} + ${lineSpacing}, id(${valueFontId}), ${color}, ${drawAlign}, "%s", fullValue.c_str());`);
+                                    lines.push(`          it.printf(${alignX}, ${alignY}, id(${labelFontId}), ${color}, ${espAlign}, "${title}");`);
+                                    lines.push(`          it.printf(${alignX}, ${alignY} + ${lineSpacing}, id(${valueFontId}), ${color}, ${espAlign}, "%s", fullValue.c_str());`);
                                     if (colorProp.toLowerCase() === "gray" || colorProp.toLowerCase() === "grey") {
                                         lines.push(`          apply_grey_dither_mask(${w.x}, ${w.y + TEXT_Y_OFFSET}, ${w.width}, ${w.height});`);
                                     }
@@ -2139,20 +1884,13 @@ async function generateSnippetLocally() {
                             const colorProp = p.color || "black";
                             const color = getColorConst(colorProp);
                             const fontRef = addFont("Material Design Icons", 400, size);
-                            const iconAlign = p.text_align || "TOP_LEFT";
-                            const iconAlignX = getAlignX(iconAlign, w.x, w.width);
-                            const iconAlignY = getAlignY(iconAlign, w.y, w.height);
-                            const espIconAlign = `TextAlign::${iconAlign}`;
-                            lines.push(`        // widget:icon id:${w.id} type:icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} code:${code} size:${size} color:${colorProp} text_align:${iconAlign} ${getCondProps(w)}`);
-                            const cond = getConditionCheck(w);
-                            if (cond) lines.push(`        ${cond}`);
+                            lines.push(`        // widget:icon id:${w.id} type:icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} code:${code} size:${size} color:${colorProp} ${getCondProps(w)}`);
                             // Use printf for icons to handle unicode safely
-                            lines.push(`        it.printf(${iconAlignX}, ${iconAlignY}, id(${fontRef}), ${color}, ${espIconAlign}, "%s", "\\U000${code}");`);
+                            lines.push(`        it.printf(${w.x}, ${w.y}, id(${fontRef}), ${color}, "%s", "\\U000${code}");`);
                             // Apply grey dithering if color is gray
                             if (colorProp.toLowerCase() === "gray") {
                                 lines.push(`        apply_grey_dither_mask(${w.x}, ${w.y}, ${size}, ${size});`);
                             }
-                            if (cond) lines.push(`        }`);
 
                         } else if (t === "graph") {
                             const entityId = (w.entity_id || "").trim();
@@ -2216,9 +1954,6 @@ async function generateSnippetLocally() {
                             }
 
                             lines.push(`        // widget:graph id:${w.id} type:graph x:${w.x} y:${w.y} w:${w.width} h:${w.height} title:"${title}" entity:${entityId} local:${!!p.is_local_sensor} duration:${duration} border:${borderEnabled} color:${colorProp} x_grid:${xGrid} y_grid:${yGrid} line_type:${lineType} line_thickness:${lineThickness} continuous:${continuous} min_value:${minValue} max_value:${maxValue} min_range:${minRange} max_range:${maxRange} ${getCondProps(w)}`);
-
-                            const cond = getConditionCheck(w);
-                            if (cond) lines.push(`        ${cond}`);
 
                             if (entityId) {
                                 // Pass color as 4th parameter? NO, standard Graph component does not support it.
@@ -2299,9 +2034,9 @@ async function generateSnippetLocally() {
                                     lines.push(`        it.printf(${w.x} + ${xOffset}, ${w.y} + ${w.height} + 2, id(font_roboto_400_12), ${color}, ${align}, "${labelText}");`);
                                 }
                             } else {
+                                lines.push(`        it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${color});`);
                                 lines.push(`        it.printf(${w.x}+5, ${w.y}+5, id(font_roboto_400_12), ${color}, TextAlign::TOP_LEFT, "Graph (no entity)");`);
                             }
-                            if (cond) lines.push(`        }`);
 
                         } else if (t === "progress_bar") {
                             const entityId = (w.entity_id || "").trim();
@@ -2315,8 +2050,6 @@ async function generateSnippetLocally() {
                             addFont("Roboto", 400, 12); // Progress bar uses small font for labels
 
                             lines.push(`        // widget:progress_bar id:${w.id} type:progress_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} title:"${title}" show_label:${showLabel} show_pct:${showPercentage} bar_height:${barHeight} border:${borderWidth} color:${colorProp} local:${!!p.is_local_sensor} ${getCondProps(w)}`);
-                            const cond = getConditionCheck(w);
-                            if (cond) lines.push(`        ${cond}`);
 
                             if (entityId) {
                                 const safeId = entityId.replace(/^sensor\./, "").replace(/\./g, "_").replace(/-/g, "_");
@@ -2344,7 +2077,6 @@ async function generateSnippetLocally() {
                                     lines.push(`        it.printf(${w.x}, ${w.y}, id(font_roboto_400_12), ${color}, TextAlign::TOP_LEFT, "${title}");`);
                                 }
                             }
-                            if (cond) lines.push(`        }`);
 
                         } else if (t === "battery" || t === "battery_icon") {
                             const entityId = (w.entity_id || "").trim();
@@ -2359,14 +2091,15 @@ async function generateSnippetLocally() {
                             if (p.is_local_sensor) {
                                 sensorId = "battery_level";
                             } else {
-                                // Fix for Issue #120: Use consistent ID sanitization for HA entities
-                                // This matches the logic used in sensor generation (sanitizing entity_id)
-                                sensorId = entityId ? entityId.replace(/[^a-zA-Z0-9_]/g, "_") : "battery_level";
+                                // Fix for legacy/broken default ID
+                                if (entityId === "sensor.reterminal_e1001_battery_level") {
+                                    sensorId = "battery_level";
+                                } else {
+                                    sensorId = entityId ? entityId.replace(/^sensor\./, "").replace(/\./g, "_").replace(/-/g, "_") : "battery_level";
+                                }
                             }
 
                             lines.push(`        // widget:battery_icon id:${w.id} type:battery_icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId || "battery_level"} size:${size} font_size:${fontSize} color:${colorProp} local:${!!p.is_local_sensor} ${getCondProps(w)}`);
-                            const cond = getConditionCheck(w);
-                            if (cond) lines.push(`        ${cond}`);
                             lines.push(`        {`);
                             lines.push(`          const char* bat_icon = "\\U000F0082"; // Default: battery-outline (unknown)`);
                             lines.push(`          float bat_level = 0;`);
@@ -2392,7 +2125,6 @@ async function generateSnippetLocally() {
                                 lines.push(`          apply_grey_dither_mask(${w.x}, ${w.y}, ${w.width}, ${w.height});`);
                             }
                             lines.push(`        }`);
-                            if (cond) lines.push(`        }`);
 
                         } else if (t === "wifi_signal") {
                             const entityId = (w.entity_id || "").trim();
@@ -2410,13 +2142,10 @@ async function generateSnippetLocally() {
                             if (isLocal) {
                                 sensorId = "wifi_signal_dbm";
                             } else {
-                                // Fix for Issue #120: Use consistent ID sanitization for HA entities
-                                sensorId = entityId ? entityId.replace(/[^a-zA-Z0-9_]/g, "_") : "wifi_signal_dbm";
+                                sensorId = entityId ? entityId.replace(/^sensor\./, "").replace(/\./g, "_").replace(/-/g, "_") : "wifi_signal_dbm";
                             }
 
                             lines.push(`        // widget:wifi_signal id:${w.id} type:wifi_signal x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId || "wifi_signal_dbm"} size:${size} font_size:${fontSize} color:${colorProp} show_dbm:${showDbm} local:${isLocal} ${getCondProps(w)}`);
-                            const cond = getConditionCheck(w);
-                            if (cond) lines.push(`        ${cond}`);
                             lines.push(`        {`);
                             lines.push(`          const char* wifi_icon = "\\U000F092B"; // Default: wifi-strength-alert-outline`);
                             lines.push(`          if (id(${sensorId}).has_state()) {`);
@@ -2448,7 +2177,7 @@ async function generateSnippetLocally() {
                             const labelFontSize = parseInt(p.label_font_size || 10, 10);
                             const colorProp = p.color || "black";
                             const color = getColorConst(colorProp);
-                            const unit = (p.unit || "°C").replace(/%/g, "%%");
+                            const unit = p.unit || "°C";
                             const showLabel = p.show_label !== false;
                             const precision = p.precision ?? 1;
                             const isLocal = p.is_local_sensor !== false;
@@ -2457,51 +2186,33 @@ async function generateSnippetLocally() {
                             const labelFontRef = addFont("Roboto", 400, labelFontSize);
 
                             // Determine sensor ID
-                            let sensorId = null;
+                            let sensorId;
                             if (isLocal) {
                                 if (profile.features.sht4x) sensorId = "sht4x_temperature";
                                 else if (profile.features.sht3x) sensorId = "sht3x_temperature";
                                 else if (profile.features.shtc3) sensorId = "shtc3_temperature";
-                                else if (profile.features.sht4x !== false) sensorId = "sht4x_temperature"; // Legacy Fallback only if not explicitly false
+                                else sensorId = "sht4x_temperature"; // Fallback
                             } else {
-                                // Fix for Issue #102: Use consistent ID sanitization for custom entities
-                                // Matches the logic used in generateSensorSection
-                                sensorId = entityId ? entityId.replace(/[^a-zA-Z0-9_]/g, "_") : null;
+                                sensorId = entityId ? entityId.replace(/^sensor\./, "").replace(/\./g, "_").replace(/-/g, "_") : "sht4x_temperature";
                             }
 
-                            lines.push(`        // widget:ondevice_temperature id:${w.id} x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId || sensorId} icon_size:${iconSize} font_size:${fontSize} color:${colorProp} local:${isLocal} unit:${unit} precision:${precision} ${getCondProps(w)}`);
-                            const cond = getConditionCheck(w);
-                            if (cond) lines.push(`        ${cond}`);
+                            lines.push(`        // widget:ondevice_temperature id:${w.id} x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId || sensorId} icon_size:${iconSize} font_size:${fontSize} color:${colorProp} local:${isLocal} ${getCondProps(w)}`);
                             lines.push(`        {`);
                             lines.push(`          const char* temp_icon = "\\U000F050F"; // Default: thermometer`);
                             lines.push(`          float temp_val = NAN;`);
-
-                            if (sensorId) {
-                                lines.push(`          if (id(${sensorId}).has_state()) {`);
-                                lines.push(`            float raw_val = id(${sensorId}).state;`);
-                                lines.push(`            temp_val = raw_val;`);
-                                if (unit === "°F") {
-                                    lines.push(`            temp_val = temp_val * 9.0 / 5.0 + 32.0;`);
-                                }
-                                lines.push(`            if (raw_val <= 10) temp_icon = "\\U000F0E4C";      // thermometer-low`);
-                                lines.push(`            else if (raw_val > 25) temp_icon = "\\U000F10C2"; // thermometer-high`);
-                                lines.push(`          }`);
-                            }
-
+                            lines.push(`          if (id(${sensorId}).has_state()) {`);
+                            lines.push(`            temp_val = id(${sensorId}).state;`);
+                            lines.push(`            if (temp_val <= 10) temp_icon = "\\U000F0E4C";      // thermometer-low`);
+                            lines.push(`            else if (temp_val > 25) temp_icon = "\\U000F10C2"; // thermometer-high`);
+                            lines.push(`          }`);
                             // Icon centered at top
                             lines.push(`          it.printf(${Math.round(w.x + w.width / 2)}, ${w.y}, id(${iconFontRef}), ${color}, TextAlign::TOP_CENTER, "%s", temp_icon);`);
                             // Value below icon
-                            if (sensorId) {
-                                lines.push(`          if (id(${sensorId}).has_state()) {`);
-                                lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "%.${precision}f${unit}", temp_val);`);
-                                lines.push(`          } else {`);
-                                lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "--${unit}");`);
-                                lines.push(`          }`);
-                            } else {
-                                // Placeholder for missing sensor (e.g. Trmnl DIY with no local sensor)
-                                lines.push(`          it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "--${unit}");`);
-                            }
-
+                            lines.push(`          if (id(${sensorId}).has_state()) {`);
+                            lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "%.${precision}f${unit}", id(${sensorId}).state);`);
+                            lines.push(`          } else {`);
+                            lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "--${unit}");`);
+                            lines.push(`          }`);
                             // Label below value
                             if (showLabel) {
                                 lines.push(`          it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + fontSize + 4}, id(${labelFontRef}), ${color}, TextAlign::TOP_CENTER, "Temperature");`);
@@ -2511,7 +2222,6 @@ async function generateSnippetLocally() {
                                 lines.push(`          apply_grey_dither_mask(${w.x}, ${w.y}, ${w.width}, ${w.height});`);
                             }
                             lines.push(`        }`);
-                            if (cond) lines.push(`        }`);
 
                         } else if (t === "ondevice_humidity") {
                             const entityId = (w.entity_id || "").trim();
@@ -2520,7 +2230,7 @@ async function generateSnippetLocally() {
                             const labelFontSize = parseInt(p.label_font_size || 10, 10);
                             const colorProp = p.color || "black";
                             const color = getColorConst(colorProp);
-                            const unit = (p.unit || "%").replace(/%/g, "%%");
+                            const unit = p.unit || "%";
                             const showLabel = p.show_label !== false;
                             const precision = p.precision ?? 0;
                             const isLocal = p.is_local_sensor !== false;
@@ -2529,45 +2239,33 @@ async function generateSnippetLocally() {
                             const labelFontRef = addFont("Roboto", 400, labelFontSize);
 
                             // Determine sensor ID
-                            let sensorId = null;
+                            let sensorId;
                             if (isLocal) {
                                 if (profile.features.sht4x) sensorId = "sht4x_humidity";
                                 else if (profile.features.sht3x) sensorId = "sht3x_humidity";
                                 else if (profile.features.shtc3) sensorId = "shtc3_humidity";
-                                else if (profile.features.sht4x !== false) sensorId = "sht4x_humidity"; // Fallback only if enabled
+                                else sensorId = "sht4x_humidity"; // Fallback
                             } else {
-                                // Fix for custom entity IDs
-                                sensorId = entityId ? entityId.replace(/[^a-zA-Z0-9_]/g, "_") : null;
+                                sensorId = entityId ? entityId.replace(/^sensor\./, "").replace(/\./g, "_").replace(/-/g, "_") : "sht4x_humidity";
                             }
 
                             lines.push(`        // widget:ondevice_humidity id:${w.id} x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId || sensorId} icon_size:${iconSize} font_size:${fontSize} color:${colorProp} local:${isLocal} ${getCondProps(w)}`);
-                            const condHum = getConditionCheck(w);
-                            if (condHum) lines.push(`        ${condHum}`);
                             lines.push(`        {`);
                             lines.push(`          const char* hum_icon = "\\U000F058E"; // Default: water-percent`);
                             lines.push(`          float hum_val = NAN;`);
-
-                            if (sensorId) {
-                                lines.push(`          if (id(${sensorId}).has_state()) {`);
-                                lines.push(`            hum_val = id(${sensorId}).state;`);
-                                lines.push(`            if (hum_val <= 30) hum_icon = "\\U000F0E7A";       // water-outline`);
-                                lines.push(`            else if (hum_val > 60) hum_icon = "\\U000F058C"; // water`);
-                                lines.push(`          }`);
-                            }
-
+                            lines.push(`          if (id(${sensorId}).has_state()) {`);
+                            lines.push(`            hum_val = id(${sensorId}).state;`);
+                            lines.push(`            if (hum_val <= 30) hum_icon = "\\U000F0E7A";       // water-outline`);
+                            lines.push(`            else if (hum_val > 60) hum_icon = "\\U000F058C"; // water`);
+                            lines.push(`          }`);
                             // Icon centered at top
                             lines.push(`          it.printf(${Math.round(w.x + w.width / 2)}, ${w.y}, id(${iconFontRef}), ${color}, TextAlign::TOP_CENTER, "%s", hum_icon);`);
                             // Value below icon
-                            if (sensorId) {
-                                lines.push(`          if (id(${sensorId}).has_state()) {`);
-                                lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "%.${precision}f${unit}", id(${sensorId}).state);`);
-                                lines.push(`          } else {`);
-                                lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "--${unit}");`);
-                                lines.push(`          }`);
-                            } else {
-                                lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "--${unit}");`);
-                            }
-
+                            lines.push(`          if (id(${sensorId}).has_state()) {`);
+                            lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "%.${precision}f${unit}", id(${sensorId}).state);`);
+                            lines.push(`          } else {`);
+                            lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "--${unit}");`);
+                            lines.push(`          }`);
                             // Label below value
                             if (showLabel) {
                                 lines.push(`          it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + fontSize + 4}, id(${labelFontRef}), ${color}, TextAlign::TOP_CENTER, "Humidity");`);
@@ -2577,7 +2275,6 @@ async function generateSnippetLocally() {
                                 lines.push(`          apply_grey_dither_mask(${w.x}, ${w.y}, ${w.width}, ${w.height});`);
                             }
                             lines.push(`        }`);
-                            if (condHum) lines.push(`        }`);
 
                         } else if (t === "template_sensor_bar") {
                             const iconSize = parseInt(p.icon_size || 20, 10);
@@ -2595,9 +2292,8 @@ async function generateSnippetLocally() {
                             const iconFontRef = addFont("Material Design Icons", 400, iconSize);
                             const textFontRef = addFont("Roboto", 500, fontSize);
 
-                            lines.push(`        // widget:template_sensor_bar id:${w.id} type:template_sensor_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} wifi:${showWifi} temp:${showTemp} hum:${showHum} bat:${showBat} bg:${showBg} bg_color:${p.background_color || "black"} radius:${radius} icon_size:${iconSize} font_size:${fontSize} color:${colorProp} temp_unit:${p.temperature_unit || "°C"} ${getCondProps(w)}`);
-                            const condSens = getConditionCheck(w);
-                            if (condSens) lines.push(`        ${condSens}`);
+                            lines.push(`        // widget:template_sensor_bar id:${w.id} type:template_sensor_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} wifi:${showWifi} temp:${showTemp} hum:${showHum} bat:${showBat} bg:${showBg} bg_color:${p.background_color || "black"} radius:${radius} icon_size:${iconSize} font_size:${fontSize} color:${colorProp} ${getCondProps(w)}`);
+
                             lines.push(`        {`);
                             if (showBg) {
                                 // Use bgColor for background
@@ -2643,20 +2339,10 @@ async function generateSnippetLocally() {
 
                                 if (showTemp) {
                                     const tempId = profile.features.sht4x ? "sht4x_temperature" : (profile.features.sht3x ? "sht3x_temperature" : "shtc3_temperature");
-                                    const tUnit = p.temperature_unit || "°C";
                                     lines.push(`          {`);
                                     lines.push(`            it.printf(${Math.round(currentX)} - 12, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_LEFT, "\\U000F050F");`);
-
-                                    lines.push(`            if (id(${tempId}).has_state()) {`);
-                                    lines.push(`              float val = id(${tempId}).state;`);
-                                    if (tUnit === "°F") {
-                                        lines.push(`              val = val * 9.0/5.0 + 32.0;`);
-                                    }
-                                    lines.push(`              it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.1f${tUnit}", val);`);
-                                    lines.push(`            } else {`);
-                                    lines.push(`              it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--${tUnit}");`);
-                                    lines.push(`            }`);
-
+                                    lines.push(`            if (id(${tempId}).has_state()) it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.1f°C", id(${tempId}).state);`);
+                                    lines.push(`            else it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--°C");`);
                                     lines.push(`          }`);
                                     currentX += spacing;
                                 }
@@ -2673,16 +2359,12 @@ async function generateSnippetLocally() {
 
                                 if (showBat) {
                                     lines.push(`          {`);
-                                    lines.push(`            const char* bat_icon = "\\\\U000F0082";`);
-                                    lines.push(`            float lvl = 0;`);
-                                    lines.push(`            if (id(battery_level).has_state()) {`);
-                                    lines.push(`              lvl = id(battery_level).state;`);
-                                    lines.push(`              if (std::isnan(lvl)) lvl = 0;`);
-                                    lines.push(`            }`);
-                                    lines.push(`            if (lvl >= 90) bat_icon = "\\\\U000F0079";`);
-                                    lines.push(`            else if (lvl >= 50) bat_icon = "\\\\U000F007E";`);
-                                    lines.push(`            else if (lvl >= 20) bat_icon = "\\\\U000F007B";`);
-                                    lines.push(`            else bat_icon = "\\\\U000F0083";`);
+                                    lines.push(`            const char* bat_icon = "\\U000F0082";`);
+                                    lines.push(`            float lvl = id(battery_level).state;`);
+                                    lines.push(`            if (lvl >= 90) bat_icon = "\\U000F0079";`);
+                                    lines.push(`            else if (lvl >= 50) bat_icon = "\\U000F007E";`);
+                                    lines.push(`            else if (lvl >= 20) bat_icon = "\\U000F007B";`);
+                                    lines.push(`            else bat_icon = "\\U000F0083";`);
                                     lines.push(`            it.printf(${Math.round(currentX)} - 12, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_LEFT, "%s", bat_icon);`);
                                     lines.push(`            if (id(battery_level).has_state()) it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0f%%", id(battery_level).state);`);
                                     lines.push(`            else it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--%%");`);
@@ -2695,7 +2377,6 @@ async function generateSnippetLocally() {
                                 lines.push(`          apply_grey_dither_mask(${w.x}, ${w.y}, ${w.width}, ${w.height});`);
                             }
                             lines.push(`        }`);
-                            if (condSens) lines.push(`        }`);
 
                         } else if (t === "template_nav_bar") {
                             const iconSize = parseInt(p.icon_size || 24, 10);
@@ -2712,8 +2393,7 @@ async function generateSnippetLocally() {
                             const iconFontRef = addFont("Material Design Icons", 400, iconSize);
 
                             lines.push(`        // widget:template_nav_bar id:${w.id} type:template_nav_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} prev:${showPrev} home:${showHome} next:${showNext} bg:${showBg} bg_color:${p.background_color || "black"} radius:${radius} icon_size:${iconSize} color:${colorProp} ${getCondProps(w)}`);
-                            const condNav = getConditionCheck(w);
-                            if (condNav) lines.push(`        ${condNav}`);
+
                             lines.push(`        {`);
                             if (showBg) {
                                 // Use bgColor for background
@@ -2757,7 +2437,6 @@ async function generateSnippetLocally() {
                                 lines.push(`          apply_grey_dither_mask(${w.x}, ${w.y}, ${w.width}, ${w.height});`);
                             }
                             lines.push(`        }`);
-                            if (condNav) lines.push(`        }`);
 
                         } else if (t === "weather_icon") {
 
@@ -2768,8 +2447,6 @@ async function generateSnippetLocally() {
                             const color = getColorConst(colorProp);
                             const fontRef = addFont("Material Design Icons", 400, size);
                             lines.push(`        // widget:weather_icon id:${w.id} type:weather_icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} size:${size} color:${colorProp} ${getCondProps(w)}`);
-                            const condWeather = getConditionCheck(w);
-                            if (condWeather) lines.push(`        ${condWeather}`);
                             if (entityId) {
                                 const safeId = entityId.replace(/^sensor\./, "").replace(/\./g, "_").replace(/-/g, "_");
                                 // Generate dynamic weather icon mapping based on entity state
@@ -2804,7 +2481,8 @@ async function generateSnippetLocally() {
                                     lines.push(`        apply_grey_dither_mask(${w.x}, ${w.y}, ${size}, ${size});`);
                                 }
                             }
-                            if (condWeather) lines.push(`        }`);
+
+                            /* Removed duplicate calendar block */
 
                         } else if (t === "calendar") {
                             const entityId = (p.entity_id || "sensor.esp_calendar_data").trim();
@@ -2837,9 +2515,7 @@ async function generateSnippetLocally() {
                             const fontEventDay = addFont(fFamily, 400, 24);
                             const fontEvent = addFont(fFamily, 400, szEvent); // summary
 
-                            lines.push(`        // widget:calendar id:${w.id} type:calendar x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} border_width:${borderWidth} show_border:${showBorder} border_color:${borderColorProp} background_color:${bgColorProp} text_color:${colorProp} font_size_date:${szDate} font_size_day:${szDay} font_size_grid:${szGrid} font_size_event:${szEvent} event_limit:${p.event_limit || 2} ${getCondProps(w)}`);
-                            const condCal = getConditionCheck(w);
-                            if (condCal) lines.push(`        ${condCal}`);
+                            lines.push(`        // widget:calendar id:${w.id} type:calendar x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} border_width:${borderWidth} show_border:${showBorder} border_color:${borderColorProp} background_color:${bgColorProp} text_color:${colorProp} font_size_date:${szDate} font_size_day:${szDay} font_size_grid:${szGrid} font_size_event:${szEvent} ${getCondProps(w)}`);
                             lines.push(`        {`);
                             lines.push(`          auto time = id(ha_time).now();`);
 
@@ -2871,17 +2547,17 @@ async function generateSnippetLocally() {
                             lines.push(`          int cx = ${w.x} + (${w.width} / 2);`);
 
                             // Header: Date
-                            lines.push(`          it.printf(cx, ${w.y} + 0, id(${fontBig}), ${color}, TextAlign::TOP_CENTER, "%d", time.day_of_month);`);
-                            lines.push(`          it.printf(cx, ${w.y} + 75, id(${fontDay}), ${color}, TextAlign::TOP_CENTER, "%s", id(todays_day_name_${safeWidgetId}).state.c_str());`);
-                            lines.push(`          it.printf(cx, ${w.y} + 102, id(${fontDate}), ${color}, TextAlign::TOP_CENTER, "%s", id(todays_date_month_year_${safeWidgetId}).state.c_str());`);
+                            lines.push(`          it.printf(cx, ${w.y} + 5, id(${fontBig}), ${color}, TextAlign::TOP_CENTER, "%d", time.day_of_month);`);
+                            lines.push(`          it.printf(cx, ${w.y} + 85, id(${fontDay}), ${color}, TextAlign::TOP_CENTER, "%s", id(todays_day_name_${safeWidgetId}).state.c_str());`);
+                            lines.push(`          it.printf(cx, ${w.y} + 110, id(${fontDate}), ${color}, TextAlign::TOP_CENTER, "%s", id(todays_date_month_year_${safeWidgetId}).state.c_str());`);
 
                             // Calendar Grid
-                            lines.push(`          int calendar_y_pos = ${w.y} + 122;`);
+                            lines.push(`          int calendar_y_pos = ${w.y} + 135;`);
                             lines.push(`          char cal[7][7][3];`);
                             lines.push(`          get_calendar_matrix(time.year, time.month, cal);`);
 
                             lines.push(`          int cell_width = (${w.width} - 40) / 7;`);
-                            lines.push(`          int cell_height = 18;`);
+                            lines.push(`          int cell_height = 20;`);
                             lines.push(`          int start_x = ${w.x} + 20;`);
 
                             lines.push(`          for (int i = 0; i < 7; i++) {`);
@@ -2907,85 +2583,46 @@ async function generateSnippetLocally() {
                             }
 
                             // Events
-                            lines.push(`          // Events`);
-                            lines.push(`          ESP_LOGD("calendar", "Raw JSON: %s", id(calendar_json_${safeWidgetId}).state.c_str());`);
-                            lines.push(`          if (id(calendar_json_${safeWidgetId}).state.length() > 5 && id(calendar_json_${safeWidgetId}).state != "unknown") {`);
-                            lines.push(`             // Robust Manual Parsing for Mixed Types (Array/Object)`);
-                            lines.push(`             // Allocate 2KB on heap to avoid stack overflow inside lambda`);
-                            lines.push(`             DynamicJsonDocument doc(2048);`);
-                            lines.push(`             DeserializationError error = deserializeJson(doc, id(calendar_json_${safeWidgetId}).state);`);
-                            lines.push(``);
-                            lines.push(`             if (!error) {`);
-                            lines.push(`                 JsonVariant root = doc.as<JsonVariant>();`);
-                            lines.push(`                 JsonArray days;`);
-                            lines.push(``);
-                            lines.push(`                 if (root.is<JsonObject>() && root["days"].is<JsonArray>()) {`);
-                            lines.push(`                     days = root["days"];`);
-                            lines.push(`                 } else if (root.is<JsonArray>()) {`);
-                            lines.push(`                     days = root;`);
-                            lines.push(`                 } else {`);
-                            lines.push(`                     ESP_LOGW("calendar", "Invalid JSON structure: neither object with 'days' nor array");`);
-                            lines.push(`                     return;`);
-                            lines.push(`                 }`);
-                            lines.push(``);
-                            lines.push(`                 if (days.isNull() || days.size() == 0) {`);
-                            lines.push(`                      ESP_LOGD("calendar", "No days found in JSON");`);
-                            lines.push(`                      return;`);
-                            lines.push(`                 }`);
-                            lines.push(`                 ESP_LOGD("calendar", "Processing %d days", days.size());`);
-                            lines.push(``);
-                            lines.push(`                 int y_cursor = calendar_y_pos + (7 * cell_height) + 15;`);
-                            lines.push(`                 int max_y = ${w.y} + ${w.height} - 5;`);
-                            lines.push(``);
-                            lines.push(`                 // Safety: Ensure we have enough space for at least one event`);
-                            lines.push(`                 if (y_cursor >= max_y) { ESP_LOGW("calendar", "Widget too small for events"); return; }`);
-                            lines.push(``);
-                            lines.push(`                 it.filled_rectangle(${w.x} + 20, y_cursor - 5, ${w.width} - 40, 2, ${color});`);
-                            lines.push(``);
-                            lines.push(`                 int event_count = 0;`);
-                            lines.push(`                 int event_limit = ${p.event_limit !== undefined ? p.event_limit : 2};`);
-                            lines.push(``);
-                            lines.push(`                 for (JsonVariant dayEntry : days) {`);
-                            lines.push(`                     if (y_cursor > max_y || event_count >= event_limit) break;`);
-                            lines.push(`                     int currentDayNum = dayEntry["day"].as<int>();`);
-                            lines.push(``);
-                            lines.push(`                     auto draw_row = [&](JsonVariant event, bool is_all_day) {`);
-                            lines.push(`                         if (y_cursor > max_y || event_count >= event_limit) return;`);
-                            lines.push(`                         const char* summary = event["summary"] | "No Title";`);
-                            lines.push(`                         const char* start = event["start"] | "";`);
-                            lines.push(``);
-                            lines.push(`                         it.printf(${w.x} + 20, y_cursor, id(${fontEventDay}), ${color}, TextAlign::TOP_LEFT, "%d", currentDayNum);`);
-                            lines.push(`                         it.printf(${w.x} + 60, y_cursor + 4, id(${fontEvent}), ${color}, TextAlign::TOP_LEFT, "%.25s", summary);`);
-                            lines.push(``);
-                            lines.push(`                         if (is_all_day) {`);
-                            lines.push(`                             it.printf(${w.x} + ${w.width} - 20, y_cursor + 4, id(${fontEvent}), ${color}, TextAlign::TOP_RIGHT, "All Day");`);
-                            lines.push(`                         } else {`);
-                            lines.push(`                             std::string timeStr = extract_time(start);`);
-                            lines.push(`                             it.printf(${w.x} + ${w.width} - 20, y_cursor + 4, id(${fontEvent}), ${color}, TextAlign::TOP_RIGHT, "%s", timeStr.c_str());`);
-                            lines.push(`                         }`);
-                            lines.push(`                         y_cursor += 25;`);
-                            lines.push(`                         event_count++;`);
-                            lines.push(`                     };`);
-                            lines.push(``);
-                            lines.push(`                     if (dayEntry["all_day"].is<JsonArray>()) {`);
-                            lines.push(`                         for (JsonVariant event : dayEntry["all_day"].as<JsonArray>()) {`);
-                            lines.push(`                             draw_row(event, true);`);
-                            lines.push(`                             if (y_cursor > max_y || event_count >= event_limit) break;`);
-                            lines.push(`                         }`);
-                            lines.push(`                     }`);
-                            lines.push(`                     if (dayEntry["other"].is<JsonArray>()) {`);
-                            lines.push(`                         for (JsonVariant event : dayEntry["other"].as<JsonArray>()) {`);
-                            lines.push(`                             draw_row(event, false);`);
-                            lines.push(`                             if (y_cursor > max_y || event_count >= event_limit) break;`);
-                            lines.push(`                         }`);
-                            lines.push(`                     }`);
-                            lines.push(`                 }`);
-                            lines.push(`             } else {`);
-                            lines.push(`                  ESP_LOGW("calendar", "JSON Parse Error: %s", error.c_str());`);
-                            lines.push(`             }`);
+                            lines.push(`          if (id(calendar_json_${safeWidgetId}).state != "unknown" && id(calendar_json_${safeWidgetId}).state.length() > 2) {`);
+                            lines.push(`             json::parse_json(id(calendar_json_${safeWidgetId}).state, [&](JsonObject root) -> bool {`);
+                            lines.push(`                  JsonArray days = root["days"].as<JsonArray>();`);
+                            lines.push(`                  int y_cursor = calendar_y_pos + (7 * cell_height) + 15;`);
+                            lines.push(`                  int max_y = ${w.y} + ${w.height} - 30;`);
+                            lines.push(`                  it.filled_rectangle(${w.x} + 20, y_cursor - 5, ${w.width} - 40, 2, ${color});`);
+                            lines.push(`                  for (JsonVariant dayEntry : days) {`);
+                            lines.push(`                      if (y_cursor > max_y) break;`);
+                            lines.push(`                      int currentDayNum = dayEntry["day"].as<int>();`);
+                            lines.push(`                      auto draw_row = [&](JsonVariant event, bool is_all_day) {`);
+                            lines.push(`                          if (y_cursor > max_y) return;`);
+                            lines.push(`                          const char* summary = event["summary"];`);
+                            lines.push(`                          const char* start = event["start"];`);
+                            lines.push(`                          it.printf(${w.x} + 20, y_cursor, id(${fontEventDay}), ${color}, TextAlign::TOP_LEFT, "%d", currentDayNum);`);
+                            lines.push(`                          it.printf(${w.x} + 60, y_cursor + 4, id(${fontEvent}), ${color}, TextAlign::TOP_LEFT, "%.15s...", summary);`);
+                            lines.push(`                          if (is_all_day) {`);
+                            lines.push(`                              it.printf(${w.x} + ${w.width} - 20, y_cursor + 4, id(${fontEvent}), ${color}, TextAlign::TOP_RIGHT, "All Day");`);
+                            lines.push(`                          } else {`);
+                            lines.push(`                              std::string timeStr = extract_time(start);`);
+                            lines.push(`                              it.printf(${w.x} + ${w.width} - 20, y_cursor + 4, id(${fontEvent}), ${color}, TextAlign::TOP_RIGHT, "%s", timeStr.c_str());`);
+                            lines.push(`                          }`);
+                            lines.push(`                          y_cursor += 30;`);
+                            lines.push(`                      };`);
+                            lines.push(`                      if (dayEntry.containsKey("all_day")) {`);
+                            lines.push(`                          for (JsonVariant event : dayEntry["all_day"].as<JsonArray>()) {`);
+                            lines.push(`                              draw_row(event, true);`);
+                            lines.push(`                              if (y_cursor > max_y) break;`);
+                            lines.push(`                          }`);
+                            lines.push(`                      }`);
+                            lines.push(`                      if (dayEntry.containsKey("other")) {`);
+                            lines.push(`                          for (JsonVariant event : dayEntry["other"].as<JsonArray>()) {`);
+                            lines.push(`                              draw_row(event, false);`);
+                            lines.push(`                              if (y_cursor > max_y) break;`);
+                            lines.push(`                          }`);
+                            lines.push(`                      }`);
+                            lines.push(`                  }`);
+                            lines.push(`              return true;`);
+                            lines.push(`             });`);
                             lines.push(`          }`);
                             lines.push(`        }`);
-                            if (condCal) lines.push(`        }`);
 
                         } else if (t === "qr_code") {
                             const value = (p.value || "https://esphome.io").replace(/"/g, '\\"');
@@ -3000,10 +2637,7 @@ async function generateSnippetLocally() {
                             const scale = Math.max(1, Math.floor(availableSize / estimatedModules));
 
                             lines.push(`        // widget:qr_code id:${w.id} type:qr_code x:${w.x} y:${w.y} w:${w.width} h:${w.height} value:"${value}" scale:${scale} ecc:${ecc} color:${colorProp} ${getCondProps(w)}`);
-                            const condQR = getConditionCheck(w);
-                            if (condQR) lines.push(`        ${condQR}`);
                             lines.push(`        it.qr_code(${w.x}, ${w.y}, id(${safeId}), ${color}, ${scale});`);
-                            if (condQR) lines.push(`        }`);
 
                         } else if (t === "touch_area") {
                             const entityId = (w.entity_id || "").trim();
@@ -3017,9 +2651,7 @@ async function generateSnippetLocally() {
                             const iconColorProp = w.props.icon_color || "black";
                             const iconColor = getColorConst(iconColorProp);
 
-                            lines.push(`        // widget:touch_area id:${w.id} type:touch_area x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} title:"${title}" color:"${color}" border_color:"${borderColor}" icon:"${w.props.icon || ""}" icon_pressed:"${w.props.icon_pressed || ""}" icon_size:${iconSize} icon_color:${iconColorProp} nav_action:"${w.props.nav_action || "none"}" ${getCondProps(w)}`);
-                            const condTouch = getConditionCheck(w);
-                            if (condTouch) lines.push(`        ${condTouch}`);
+                            lines.push(`        // widget:touch_area id:${w.id} type:touch_area x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} title:"${title}" color:"${color}" border_color:"${borderColor}" icon:"${w.props.icon || ""}" icon_pressed:"${w.props.icon_pressed || ""}" icon_size:${iconSize} icon_color:${iconColorProp} nav_action:"${w.props.nav_action || "none"}"`);
 
                             if (icon) {
                                 const fontRef = addFont("Material Design Icons", 400, iconSize);
@@ -3039,7 +2671,6 @@ async function generateSnippetLocally() {
                                     lines.push(`        apply_grey_dither_mask(${w.x}, ${w.y}, ${w.width}, ${w.height});`);
                                 }
                             }
-                            if (condTouch) lines.push(`        }`);
 
                         } else if (t === "quote_rss") {
                             const feedUrl = (p.feed_url || "https://www.brainyquote.com/link/quotebr.rss").replace(/"/g, '\\"');
@@ -3077,8 +2708,6 @@ async function generateSnippetLocally() {
                             }
 
                             lines.push(`        // widget:quote_rss id:${w.id} type:quote_rss x:${w.x} y:${w.y} w:${w.width} h:${w.height} feed_url:"${feedUrl}" show_author:${showAuthor} quote_font:${quoteFontSize} author_font:${authorFontSize} color:${colorProp} align:${textAlign} italic:${italicQuote} refresh:${refreshInterval} random:${randomQuote} wrap:${wordWrap} ${getCondProps(w)}`);
-                            const condQuote = getConditionCheck(w);
-                            if (condQuote) lines.push(`        ${condQuote}`);
                             lines.push(`        {`);
                             lines.push(`          std::string quote_text = id(${quoteTextId}_global);`);
                             if (showAuthor) {
@@ -3171,8 +2800,6 @@ async function generateSnippetLocally() {
                             const iconFontId = addFont("Material Design Icons", 400, iconSize);
 
                             lines.push(`        // widget:weather_forecast id:${w.id} type:weather_forecast x:${w.x} y:${w.y} w:${w.width} h:${w.height} weather_entity:"${weatherEntity}" layout:${layout} show_high_low:${showHighLow} day_font_size:${dayFontSize} temp_font_size:${tempFontSize} icon_size:${iconSize} font_family:"${fontFamily}" color:${colorProp} ${getCondProps(w)}`);
-                            const condFore = getConditionCheck(w);
-                            if (condFore) lines.push(`        ${condFore}`);
                             lines.push(`        {`);
                             lines.push(`          static std::map<std::string, const char*> weather_icons = {`);
                             lines.push(`            {"clear-night", "\\U000F0594"}, {"cloudy", "\\U000F0590"},`);
@@ -3239,8 +2866,6 @@ async function generateSnippetLocally() {
 
                             const rrectY = w.y + RECT_Y_OFFSET;
                             lines.push(`        // widget:rounded_rect id:${w.id} type:rounded_rect x:${w.x} y:${w.y} w:${w.width} h:${w.height} fill:${fill} show_border:${showBorder} border:${thickness} radius:${r} color:${colorProp} border_color:${borderColorProp} ${getCondProps(w)}`);
-                            const condRRect = getConditionCheck(w);
-                            if (condRRect) lines.push(`        ${condRRect}`);
                             lines.push(`        {`);
 
                             if (fill) {
@@ -3290,7 +2915,6 @@ async function generateSnippetLocally() {
                                 lines.push(`          apply_grey_dither_mask(${w.x}, ${rrectY}, ${w.width}, ${w.height});`);
                             }
                             lines.push(`        }`);
-                            if (condRRect) lines.push(`        }`);
 
                         } else if (t === "shape_rect") {
                             const fill = !!p.fill;
@@ -3299,65 +2923,57 @@ async function generateSnippetLocally() {
                             const borderColorProp = p.border_color || colorProp;
                             const color = getColorConst(colorProp);
                             const borderColor = getColorConst(borderColorProp);
-                            const isFillGray = colorProp.toLowerCase() === "gray";
-                            const isBorderGray = borderColorProp.toLowerCase() === "gray";
-                            const rectY = Math.floor(w.y + RECT_Y_OFFSET);
-                            const rectX = Math.floor(w.x);
-                            const rectW = Math.floor(w.width);
-                            const rectH = Math.floor(w.height);
-
-                            lines.push(`        // widget:shape_rect id:${w.id} type:shape_rect x:${rectX} y:${Math.floor(w.y)} w:${rectW} h:${rectH} fill:${fill} border:${borderWidth} color:${colorProp} border_color:${borderColorProp} ${getCondProps(w)}`);
-                            const condSRect = getConditionCheck(w);
-                            if (condSRect) lines.push(`        ${condSRect}`);
-
+                            const isGray = colorProp.toLowerCase() === "gray";
+                            const rectY = w.y + RECT_Y_OFFSET;
+                            lines.push(`        // widget:shape_rect id:${w.id} type:shape_rect x:${w.x} y:${w.y} w:${w.width} h:${w.height} fill:${fill} border:${borderWidth} color:${colorProp} border_color:${borderColorProp} ${getCondProps(w)}`);
                             if (fill) {
-                                lines.push(`        it.filled_rectangle(${rectX}, ${rectY}, ${rectW}, ${rectH}, ${color});`);
-                            }
-
-                            if (borderWidth > 0) {
+                                if (isGray) {
+                                    lines.push(`        apply_grey_dither_mask(${w.x}, ${rectY}, ${w.width}, ${w.height});`);
+                                } else {
+                                    lines.push(`        it.filled_rectangle(${w.x}, ${rectY}, ${w.width}, ${w.height}, ${color});`);
+                                }
+                            } else {
                                 lines.push(`        for (int i = 0; i < ${borderWidth}; i++) {`);
-                                lines.push(`          it.rectangle(${rectX} + i, ${rectY} + i, ${rectW} - 2 * i, ${rectH} - 2 * i, ${borderColor});`);
+                                lines.push(`          it.rectangle(${w.x} + i, ${rectY} + i, ${w.width} - 2 * i, ${w.height} - 2 * i, ${borderColor});`);
                                 lines.push(`        }`);
                             }
-
-                            if (isEpaper && ((fill && isFillGray) || (borderWidth > 0 && isBorderGray))) {
-                                lines.push(`        apply_grey_dither_mask(${rectX}, ${rectY}, ${rectW}, ${rectH});`);
+                            if (borderColorProp.toLowerCase() === "gray" && !fill) {
+                                lines.push(`        apply_grey_dither_mask(${w.x}, ${rectY}, ${w.width}, ${w.height});`);
                             }
 
-                            if (condSRect) lines.push(`        }`);
-
                         } else if (t === "shape_circle") {
-                            const r = Math.floor(Math.min(w.width, w.height) / 2);
-                            const cx = Math.floor(w.x + w.width / 2);
-                            const cy = Math.floor(w.y + w.height / 2 + RECT_Y_OFFSET);
+                            const r = Math.min(w.width, w.height) / 2;
+                            const cx = w.x + w.width / 2;
+                            const cy = w.y + w.height / 2 + RECT_Y_OFFSET;
                             const fill = !!p.fill;
                             const borderWidth = parseInt(p.border_width || 1, 10);
                             const colorProp = p.color || "black";
                             const borderColorProp = p.border_color || colorProp;
                             const color = getColorConst(colorProp);
                             const borderColor = getColorConst(borderColorProp);
-                            const isFillGray = colorProp.toLowerCase() === "gray";
-                            const isBorderGray = borderColorProp.toLowerCase() === "gray";
-
-                            lines.push(`        // widget:shape_circle id:${w.id} type:shape_circle x:${Math.floor(w.x)} y:${Math.floor(w.y)} w:${Math.floor(w.width)} h:${Math.floor(w.height)} fill:${fill} border:${borderWidth} color:${colorProp} border_color:${borderColorProp} ${getCondProps(w)}`);
-                            const condSCircle = getConditionCheck(w);
-                            if (condSCircle) lines.push(`        ${condSCircle}`);
-
+                            const isGray = colorProp.toLowerCase() === "gray";
+                            lines.push(`        // widget:shape_circle id:${w.id} type:shape_circle x:${w.x} y:${w.y} w:${w.width} h:${w.height} fill:${fill} border:${borderWidth} color:${colorProp} border_color:${borderColorProp} ${getCondProps(w)}`);
                             if (fill) {
-                                lines.push(`        it.filled_circle(${cx}, ${cy}, ${r}, ${color});`);
-                            }
-
-                            if (borderWidth > 0) {
+                                if (isGray) {
+                                    // circle dither
+                                    const circleY = w.y + RECT_Y_OFFSET;
+                                    lines.push(`        it.filled_circle(${cx}, ${cy}, ${r}, ${color});`);
+                                    if (isEpaper) {
+                                        lines.push(`        apply_grey_dither_mask(${w.x}, ${circleY}, ${w.width}, ${w.height});`);
+                                    }
+                                } else {
+                                    lines.push(`        it.filled_circle(${cx}, ${cy}, ${r}, ${color});`);
+                                }
+                            } else {
                                 lines.push(`        for (int i = 0; i < ${borderWidth}; i++) {`);
                                 lines.push(`          it.circle(${cx}, ${cy}, ${r} - i, ${borderColor});`);
                                 lines.push(`        }`);
                             }
-
-                            if (isEpaper && ((fill && isFillGray) || (borderWidth > 0 && isBorderGray))) {
-                                lines.push(`        apply_grey_dither_mask(${Math.floor(w.x)}, ${Math.floor(w.y + RECT_Y_OFFSET)}, ${Math.floor(w.width)}, ${Math.floor(w.height)});`);
+                            if (borderColorProp.toLowerCase() === "gray" && !fill) {
+                                if (isEpaper) {
+                                    lines.push(`        apply_grey_dither_mask(${w.x}, ${w.y + RECT_Y_OFFSET}, ${w.width}, ${w.height});`);
+                                }
                             }
-
-                            if (condSCircle) lines.push(`        }`);
 
                         } else if (t === "datetime") {
                             const format = p.format || "time_date";
@@ -3373,12 +2989,10 @@ async function generateSnippetLocally() {
                             const dateFontId = addFont(fontFamily, 400, dateSize, italic);
 
                             lines.push(`        // widget:datetime id:${w.id} type:datetime x:${w.x} y:${w.y} w:${w.width} h:${w.height} format:${format} time_size:${timeSize} date_size:${dateSize} color:${colorProp} text_align:${align} italic:${italic} font_family:"${fontFamily}" ${getCondProps(w)}`);
-                            const condDT = getConditionCheck(w);
-                            if (condDT) lines.push(`        ${condDT}`);
                             lines.push(`        {`);
                             lines.push(`          auto now = id(ha_time).now();`);
 
-                            // Determine horizontal alignment for X position
+                            // Determine horizontal alignment for X position and TextAlign
                             let hAlign = "CENTER";
                             if (align.includes("LEFT")) hAlign = "LEFT";
                             else if (align.includes("RIGHT")) hAlign = "RIGHT";
@@ -3386,38 +3000,17 @@ async function generateSnippetLocally() {
                             const espAlign = `TextAlign::TOP_${hAlign}`;
                             const xPos = getAlignX(align, w.x, w.width);
 
-                            // Calculate total height and startY based on vertical alignment
-                            let totalHeight, startY;
-                            const isMultiLine = format === "time_date" || !format;
-                            if (isMultiLine) {
-                                totalHeight = timeSize + 2 + dateSize;
-                            } else if (format === "time_only") {
-                                totalHeight = timeSize;
-                            } else {
-                                totalHeight = dateSize;
-                            }
-
-                            if (align.includes("BOTTOM")) {
-                                startY = `${w.y} + ${w.height} - ${totalHeight}`;
-                            } else if (align.includes("TOP")) {
-                                startY = `${w.y}`;
-                            } else {
-                                // CENTER (default)
-                                startY = `${w.y} + (${w.height} - ${totalHeight}) / 2`;
-                            }
-
                             if (format === "time_only") {
-                                lines.push(`          it.strftime(${xPos}, ${startY}, id(${timeFontId}), ${color}, ${espAlign}, "%H:%M", now);`);
+                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${timeFontId}), ${color}, ${espAlign}, "%H:%M", now);`);
                             } else if (format === "date_only") {
-                                lines.push(`          it.strftime(${xPos}, ${startY}, id(${dateFontId}), ${color}, ${espAlign}, "%d.%m.%Y", now);`);
+                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${dateFontId}), ${color}, ${espAlign}, "%d.%m.%Y", now);`);
                             } else if (format === "weekday_day_month") {
-                                lines.push(`          it.strftime(${xPos}, ${startY}, id(${dateFontId}), ${color}, ${espAlign}, "%A %d %B", now);`);
+                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${dateFontId}), ${color}, ${espAlign}, "%A %d %B", now);`);
                             } else {
-                                lines.push(`          it.strftime(${xPos}, ${startY}, id(${timeFontId}), ${color}, ${espAlign}, "%H:%M", now);`);
-                                lines.push(`          it.strftime(${xPos}, ${startY} + ${timeSize} + 2, id(${dateFontId}), ${color}, ${espAlign}, "%a, %b %d", now);`);
+                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${timeFontId}), ${color}, ${espAlign}, "%H:%M", now);`);
+                                lines.push(`          it.strftime(${xPos}, ${w.y} + ${timeSize} + 2, id(${dateFontId}), ${color}, ${espAlign}, "%a, %b %d", now);`);
                             }
                             lines.push(`        }`);
-                            if (condDT) lines.push(`        }`);
                             if (colorProp.toLowerCase() === "gray" || colorProp.toLowerCase() === "grey") {
                                 if (isEpaper) {
                                     lines.push(`        apply_grey_dither_mask(${w.x}, ${w.y + RECT_Y_OFFSET}, ${w.width}, ${w.height});`);
@@ -3442,13 +3035,11 @@ async function generateSnippetLocally() {
                             }
 
                             lines.push(`        // widget:${t} id:${w.id} type:${t} x:${w.x} y:${w.y} w:${w.width} h:${w.height} path:"${path}" url:"${url}" invert:${invert} render_mode:"${renderMode}" ${getCondProps(w)}`);
-                            const condImg = getConditionCheck(w);
-                            if (condImg) lines.push(`        ${condImg}`);
+
                             if (imgId) {
                                 if (invert) lines.push(`        it.image(${w.x}, ${w.y}, id(${imgId}), color_off, color_on);`);
                                 else lines.push(`        it.image(${w.x}, ${w.y}, id(${imgId}));`);
                             }
-                            if (condImg) lines.push(`        }`);
 
                         } else if (t === "line") {
                             const strokeWidth = parseInt(p.stroke_width || 3, 10);
@@ -3457,11 +3048,8 @@ async function generateSnippetLocally() {
                             const orientation = p.orientation || "horizontal";
                             let rectW = (orientation === "vertical") ? strokeWidth : w.width;
                             let rectH = (orientation === "vertical") ? w.height : strokeWidth;
-                            lines.push(`        // widget:line id:${w.id} type:line x:${w.x} y:${w.y} w:${rectW} h:${rectH} stroke:${strokeWidth} color:${colorProp} orientation:${orientation} ${getCondProps(w)}`);
-                            const condLine = getConditionCheck(w);
-                            if (condLine) lines.push(`        ${condLine}`);
+                            lines.push(`        // widget:line id:${w.id} type:line x:${w.x} y:${w.y} w:${rectW} h:${rectH} stroke:${strokeWidth} color:${colorProp} orientation:${orientation}`);
                             lines.push(`        it.filled_rectangle(${w.x}, ${w.y}, ${rectW}, ${rectH}, ${color});`);
-                            if (condLine) lines.push(`        }`);
                         }
                     });
                 }
@@ -3471,18 +3059,17 @@ async function generateSnippetLocally() {
         // Determine how to apply the lambda: 
         // - For regular devices: splice into lines array
         // - For package-based devices: store for placeholder replacement
-        if (insertIdx !== -1 && !useLVGL) {
+        if (insertIdx !== -1) {
             lines.splice(insertIdx, 0, ...lambdaLines);
         }
 
         // Store lambda for package-based devices (will be used for placeholder replacement)
         if (profile.isPackageBased && packageContent) {
-            // Check if recipe already contains the lambda header immediately before placeholder
-            // (Use strict regex to avoid matching unrelated lambdas elsewhere in the file)
-            const hasImmediateHeader = /lambda:\s*\|-\s*[\r\n]+\s*# __LAMBDA_PLACEHOLDER__/.test(packageContent);
-            const lambdaContent = (hasImmediateHeader ? "" : "lambda: |-\n") + lambdaLines.join("\n");
+            // Check if recipe already contains the lambda header (avoids double lambda: |-)
+            const hasHeader = packageContent.includes("lambda: |-");
+            const lambdaContent = (hasHeader ? "" : "lambda: |-\n") + lambdaLines.join("\n");
 
-            packageContent = packageContent.replace(/^[ \t]*# __LAMBDA_PLACEHOLDER__/m, lambdaContent);
+            packageContent = packageContent.replace("# __LAMBDA_PLACEHOLDER__", lambdaContent);
         }
     }
 
@@ -3530,9 +3117,6 @@ async function generateSnippetLocally() {
     // If package-based, we prepend the package content to our dynamic software sections.
     // ==========================================================================
     if (packageContent && profile.isPackageBased) {
-        // Sanitize first to remove system boilerplate (Philosophy Alignment)
-        packageContent = sanitizePackageContent(packageContent);
-        packageContent = applyPackageOverrides(packageContent, profile, payload.orientation || 'landscape');
         return packageContent + "\n\n" + finalYaml;
     }
 
@@ -3542,12 +3126,7 @@ async function generateSnippetLocally() {
 
 function generateScriptSection(payload, pagesLocal, profile = {}) {
     const lines = [];
-    // Use my_display for: LCD devices, package-based recipes, or profiles with custom display_config
-    // These all define the display as "my_display" in their YAML
-    const displayId = (profile.features?.lcd || profile.isPackageBased || profile.display_config)
-        ? "my_display"
-        : "epaper_display";
-
+    const displayId = profile.features?.lcd ? "my_display" : "epaper_display";
 
     // Start the script section
     lines.push("script:");
@@ -3842,90 +3421,4 @@ document.addEventListener("DOMContentLoaded", () => {
 // Expose globally
 window.generateSnippetLocally = generateSnippetLocally;
 window.highlightWidgetInSnippet = highlightWidgetInSnippet;
-
-/**
- * Applies dynamic overrides to static package content (e.g. Orientation)
- */
-function applyPackageOverrides(packageContent, profile, orientation) {
-    // Target specific package-based devices
-    // Currently only Waveshare 7" is confirmed to need this
-    if (profile.name && profile.name.includes("Waveshare Touch LCD 7")) {
-        let rotation = 90; // Default Landscape
-
-        // Map orientation to rotation degrees
-        // Assuming Native Portrait (0=Portrait, 90=Landscape) based on default config
-        if (orientation === "portrait") rotation = 0;
-        else if (orientation === "landscape") rotation = 90;
-        else if (orientation === "portrait_inverted") rotation = 180;
-        else if (orientation === "landscape_inverted") rotation = 270;
-
-        // Replace rotation
-        packageContent = packageContent.replace(/rotation:\s*\d+/g, `rotation: ${rotation}`);
-
-        // Add Touchscreen Transform
-        // GT911 supports 'transform' with swap_xy, mirror_x, mirror_y
-        let transformVals = "";
-
-        // Logic: 
-        // 0 (Portrait) -> swap_xy: true
-        // 90 (Landscape) -> swap_xy: false
-        // Mirrors depend on driver defaults, guessing standard behavior:
-
-        if (rotation === 0) { // Portrait
-            transformVals = `  transform:
-    swap_xy: true
-    mirror_x: false
-    mirror_y: true`;
-        } else if (rotation === 90) { // Landscape (Default)
-            // No transform needed usually, but explicit set prevents issues
-            transformVals = `  transform:
-    swap_xy: false
-    mirror_x: false
-    mirror_y: false`;
-        } else if (rotation === 180) { // Portrait Inverted
-            transformVals = `  transform:
-    swap_xy: true
-    mirror_x: true
-    mirror_y: false`;
-        } else if (rotation === 270) { // Landscape Inverted
-            transformVals = `  transform:
-    swap_xy: false
-    mirror_x: true
-    mirror_y: true`;
-        }
-
-        // Inject transform into touchscreen section
-        // Look for 'id: my_touchscreen'
-        if (transformVals) {
-            const touchRegex = /(id:\s*my_touchscreen\s*\n)/;
-            if (touchRegex.test(packageContent)) {
-                packageContent = packageContent.replace(touchRegex, `$1${transformVals}\n`);
-            }
-        }
-
-        // Fix Display Dimensions if rotated
-        // Package has: 
-        // dimensions:
-        //   width: 800
-        //   height: 480
-        // If portrait, this should be swapped?
-        // Actually, mipi_rgb usually takes physical dims. 
-        // But if we rotate via software 'rotation', we usually keep physical dims.
-        // However, if we change 'rotation' to 0 (native), does it expect 480x800?
-        // Use regex to swap if needed.
-        /*
-        if (rotation === 0 || rotation === 180) {
-            packageContent = packageContent.replace(/width:\s*800/, "width: 480");
-            packageContent = packageContent.replace(/height:\s*480/, "height: 800");
-        } else {
-            // Ensure landscape dims
-            packageContent = packageContent.replace(/width:\s*480/, "width: 800");
-            packageContent = packageContent.replace(/height:\s*800/, "height: 480");
-        }
-        */
-
-    }
-
-    return packageContent;
-}
 
