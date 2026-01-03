@@ -1858,10 +1858,19 @@ async function generateSnippetLocally() {
                                 } else if ((valueFormat === "label_newline_value" || valueFormat === "label_newline_value_no_unit") && title) {
                                     // Label on first line, value on second line  
                                     const lineSpacing = labelFontSize + 2;
+                                    const totalHeight = labelFontSize + valueFontSize + 2;
+                                    // Calculate top of the group for vertical centering
+                                    const groupY = `(${getAlignY(align, w.y, w.height)}) - ${totalHeight / 2}`;
+
+                                    // For multi-line block printing, we use TOP_* alignment because we calculated the top coordinate
+                                    let hAlignSub = "CENTER";
+                                    if (align.includes("LEFT")) hAlignSub = "LEFT";
+                                    else if (align.includes("RIGHT")) hAlignSub = "RIGHT";
+                                    const topAlign = `TextAlign::TOP_${hAlignSub}`;
 
                                     lines.push(`          // label_newline_value format: label on line 1, value on line 2`);
-                                    lines.push(`          it.printf(${alignX}, ${alignY}, id(${labelFontId}), ${color}, ${espAlign}, "${title}");`);
-                                    lines.push(`          it.printf(${alignX}, ${alignY} + ${lineSpacing}, id(${valueFontId}), ${color}, ${espAlign}, "%s", fullValue.c_str());`);
+                                    lines.push(`          it.printf(${alignX}, ${groupY}, id(${labelFontId}), ${color}, ${topAlign}, "${title}");`);
+                                    lines.push(`          it.printf(${alignX}, ${groupY} + ${lineSpacing}, id(${valueFontId}), ${color}, ${topAlign}, "%s", fullValue.c_str());`);
                                     if (colorProp.toLowerCase() === "gray" || colorProp.toLowerCase() === "grey") {
                                         lines.push(`          apply_grey_dither_mask(${w.x}, ${w.y + TEXT_Y_OFFSET}, ${w.width}, ${w.height});`);
                                     }
@@ -1881,14 +1890,16 @@ async function generateSnippetLocally() {
                         } else if (t === "icon") {
                             const code = (p.code || "F0595").replace(/^0x/i, "");
                             const size = parseInt(p.size || 48, 10);
-                            const colorProp = p.color || "black";
+                            // FIX: Default color should respect page dark mode (like text widget)
+                            const colorProp = p.color || (effectiveDarkMode ? "white" : "black");
                             const color = getColorConst(colorProp);
                             const fontRef = addFont("Material Design Icons", 400, size);
+
                             lines.push(`        // widget:icon id:${w.id} type:icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} code:${code} size:${size} color:${colorProp} ${getCondProps(w)}`);
-                            // Use printf for icons to handle unicode safely
-                            lines.push(`        it.printf(${w.x}, ${w.y}, id(${fontRef}), ${color}, "%s", "\\U000${code}");`);
+                            // FIX: Use simple coordinates without TextAlign to match 0.8.6 behavior
+                            lines.push(`        it.printf(${w.x}, ${w.y}, id(${fontRef}), ${color}, "\\U000${code}");`);
                             // Apply grey dithering if color is gray
-                            if (colorProp.toLowerCase() === "gray") {
+                            if (colorProp.toLowerCase() === "gray" || colorProp.toLowerCase() === "grey") {
                                 lines.push(`        apply_grey_dither_mask(${w.x}, ${w.y}, ${size}, ${size});`);
                             }
 
@@ -2109,13 +2120,12 @@ async function generateSnippetLocally() {
                             lines.push(`            if (bat_level >= 95) bat_icon = "\\U000F0079";      // battery (full)`);
                             lines.push(`            else if (bat_level >= 85) bat_icon = "\\U000F0082"; // battery-90`);
                             lines.push(`            else if (bat_level >= 75) bat_icon = "\\U000F0081"; // battery-80`);
-                            lines.push(`            else if (bat_level >= 65) bat_icon = "\\U000F0080"; // battery-70`);
-                            lines.push(`            else if (bat_level >= 55) bat_icon = "\\U000F007F"; // battery-60`);
-                            lines.push(`            else if (bat_level >= 45) bat_icon = "\\U000F007E"; // battery-50`);
-                            lines.push(`            else if (bat_level >= 35) bat_icon = "\\U000F007D"; // battery-40`);
-                            lines.push(`            else if (bat_level >= 25) bat_icon = "\\U000F007C"; // battery-30`);
-                            lines.push(`            else if (bat_level >= 15) bat_icon = "\\U000F007B"; // battery-20`);
-                            lines.push(`            else if (bat_level >= 5) bat_icon = "\\U000F007A";  // battery-10`);
+                            lines.push(`            else if (bat_level >= 65) bat_icon = "\\U000F007F"; // battery-70`);
+                            lines.push(`            else if (bat_level >= 55) bat_icon = "\\U000F007E"; // battery-60`);
+                            lines.push(`            else if (bat_level >= 45) bat_icon = "\\U000F007D"; // battery-40`);
+                            lines.push(`            else if (bat_level >= 35) bat_icon = "\\U000F007C"; // battery-30`);
+                            lines.push(`            else if (bat_level >= 25) bat_icon = "\\U000F007B"; // battery-20`);
+                            lines.push(`            else if (bat_level >= 15) bat_icon = "\\U000F007A";  // battery-10`);
                             lines.push(`            else bat_icon = "\\U000F0083";                      // battery-alert (critical)`);
                             lines.push(`          }`);
                             lines.push(`          it.printf(${w.x}, ${w.y}, id(${fontRef}), ${color}, "%s", bat_icon);`);
@@ -2528,10 +2538,8 @@ async function generateSnippetLocally() {
                             if (showBorder) {
                                 lines.push(`          for (int i = 0; i < ${borderWidth}; i++) {`);
                                 lines.push(`            it.rectangle(${w.x} + i, ${w.y} + i, ${w.width} - 2 * i, ${w.height} - 2 * i, ${borderColor});`);
-                                lines.push(`          }`);
                                 if (borderColorProp.toLowerCase() === 'gray') {
-                                    lines.push(`          // Apply dither to border`);
-                                    lines.push(`          for (int i = 0; i < ${borderWidth}; i++) {`);
+                                    lines.push(`            // Apply dither to border`);
                                     lines.push(`            for (int x = ${w.x}; x < ${w.x} + ${w.width}; x++) {`);
                                     lines.push(`              if ((x + ${w.y} + i) % 2 != 0) it.draw_pixel_at(x, ${w.y} + i, color_off);`);
                                     lines.push(`              if ((x + ${w.y} + ${w.height} - 1 - i) % 2 != 0) it.draw_pixel_at(x, ${w.y} + ${w.height} - 1 - i, color_off);`);
@@ -2540,8 +2548,8 @@ async function generateSnippetLocally() {
                                     lines.push(`              if ((${w.x} + i + y) % 2 != 0) it.draw_pixel_at(${w.x} + i, y, color_off);`);
                                     lines.push(`              if ((${w.x} + ${w.width} - 1 - i + y) % 2 != 0) it.draw_pixel_at(${w.x} + ${w.width} - 1 - i, y, color_off);`);
                                     lines.push(`            }`);
-                                    lines.push(`          }`);
                                 }
+                                lines.push(`          }`);
                             }
 
                             lines.push(`          int cx = ${w.x} + (${w.width} / 2);`);
@@ -2992,23 +3000,30 @@ async function generateSnippetLocally() {
                             lines.push(`        {`);
                             lines.push(`          auto now = id(ha_time).now();`);
 
-                            // Determine horizontal alignment for X position and TextAlign
-                            let hAlign = "CENTER";
-                            if (align.includes("LEFT")) hAlign = "LEFT";
-                            else if (align.includes("RIGHT")) hAlign = "RIGHT";
-
-                            const espAlign = `TextAlign::TOP_${hAlign}`;
                             const xPos = getAlignX(align, w.x, w.width);
 
+                            // Extract horizontal alignment for block printing
+                            let hAlignSub = "CENTER";
+                            if (align.includes("LEFT")) hAlignSub = "LEFT";
+                            else if (align.includes("RIGHT")) hAlignSub = "RIGHT";
+                            const topAlign = `TextAlign::TOP_${hAlignSub}`;
+                            const espAlign = `TextAlign::${align}`;
+
                             if (format === "time_only") {
-                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${timeFontId}), ${color}, ${espAlign}, "%H:%M", now);`);
+                                const yPos = getAlignY(align, w.y, w.height);
+                                lines.push(`          it.strftime(${xPos}, ${yPos}, id(${timeFontId}), ${color}, ${espAlign}, "%H:%M", now);`);
                             } else if (format === "date_only") {
-                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${dateFontId}), ${color}, ${espAlign}, "%d.%m.%Y", now);`);
+                                const yPos = getAlignY(align, w.y, w.height);
+                                lines.push(`          it.strftime(${xPos}, ${yPos}, id(${dateFontId}), ${color}, ${espAlign}, "%d.%m.%Y", now);`);
                             } else if (format === "weekday_day_month") {
-                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${dateFontId}), ${color}, ${espAlign}, "%A %d %B", now);`);
+                                const yPos = getAlignY(align, w.y, w.height);
+                                lines.push(`          it.strftime(${xPos}, ${yPos}, id(${dateFontId}), ${color}, ${espAlign}, "%A %d %B", now);`);
                             } else {
-                                lines.push(`          it.strftime(${xPos}, ${w.y}, id(${timeFontId}), ${color}, ${espAlign}, "%H:%M", now);`);
-                                lines.push(`          it.strftime(${xPos}, ${w.y} + ${timeSize} + 2, id(${dateFontId}), ${color}, ${espAlign}, "%a, %b %d", now);`);
+                                // Multi-line: center the block
+                                const totalHeight = timeSize + dateSize + 2;
+                                const groupY = `(${getAlignY(align, w.y, w.height)}) - ${totalHeight / 2}`;
+                                lines.push(`          it.strftime(${xPos}, ${groupY}, id(${timeFontId}), ${color}, ${topAlign}, "%H:%M", now);`);
+                                lines.push(`          it.strftime(${xPos}, ${groupY} + ${timeSize} + 2, id(${dateFontId}), ${color}, ${topAlign}, "%a, %b %d", now);`);
                             }
                             lines.push(`        }`);
                             if (colorProp.toLowerCase() === "gray" || colorProp.toLowerCase() === "grey") {
@@ -3065,11 +3080,19 @@ async function generateSnippetLocally() {
 
         // Store lambda for package-based devices (will be used for placeholder replacement)
         if (profile.isPackageBased && packageContent) {
-            // Check if recipe already contains the lambda header (avoids double lambda: |-)
-            const hasHeader = packageContent.includes("lambda: |-");
-            const lambdaContent = (hasHeader ? "" : "lambda: |-\n") + lambdaLines.join("\n");
+            // Check if recipe already contains the lambda header immediately before placeholder
+            // (Use strict regex to avoid matching unrelated lambdas elsewhere in the file)
+            const hasImmediateHeader = /lambda:\s*\|-\s*[\r\n]+\s*# __LAMBDA_PLACEHOLDER__/.test(packageContent);
 
-            packageContent = packageContent.replace("# __LAMBDA_PLACEHOLDER__", lambdaContent);
+            // Replace the entire line containing the placeholder to ensure the first line
+            // of our injected content doesn't inherit the placeholder's indentation.
+            packageContent = packageContent.replace(/^(\s*)# __LAMBDA_PLACEHOLDER__/m, (match, indent) => {
+                if (hasImmediateHeader) {
+                    return lambdaLines.join("\n");
+                } else {
+                    return indent + "lambda: |-\n" + lambdaLines.join("\n");
+                }
+            });
         }
     }
 
