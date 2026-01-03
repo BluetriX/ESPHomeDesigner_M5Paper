@@ -1846,7 +1846,7 @@ async function generateSnippetLocally() {
                                 }
 
                                 // Build full display value with prefix, unit, postfix
-                                lines.push(`          std::string fullValue = "${prefix}" + sensorValue + "${displayUnit}" + "${postfix}";`);
+                                lines.push(`          std::string fullValue = "${prefix}" + sensorValue + "${displayUnit ? " " + displayUnit : ""}" + "${postfix}";`);
 
                                 // Render based on value_format
                                 if ((valueFormat === "label_value" || valueFormat === "label_value_no_unit") && title) {
@@ -2579,11 +2579,11 @@ async function generateSnippetLocally() {
 
                             // Header: Date
                             lines.push(`          it.printf(cx, ${w.y} + 10, id(${fontBig}), ${color}, TextAlign::TOP_CENTER, "%d", time.day_of_month);`);
-                            lines.push(`          it.printf(cx, ${w.y} + 75, id(${fontDay}), ${color}, TextAlign::TOP_CENTER, "%s", id(todays_day_name_${safeWidgetId}).state.c_str());`);
-                            lines.push(`          it.printf(cx, ${w.y} + 102, id(${fontDate}), ${color}, TextAlign::TOP_CENTER, "%s", id(todays_date_month_year_${safeWidgetId}).state.c_str());`);
+                            lines.push(`          it.printf(cx, ${w.y} + 60, id(${fontDay}), ${color}, TextAlign::TOP_CENTER, "%s", id(todays_day_name_${safeWidgetId}).state.c_str());`);
+                            lines.push(`          it.printf(cx, ${w.y} + 92, id(${fontDate}), ${color}, TextAlign::TOP_CENTER, "%s", id(todays_date_month_year_${safeWidgetId}).state.c_str());`);
 
                             // Calendar Grid
-                            lines.push(`          int calendar_y_pos = ${w.y} + 122;`);
+                            lines.push(`          int calendar_y_pos = ${w.y} + 117;`);
                             lines.push(`          char cal[7][7][3];`);
                             lines.push(`          get_calendar_matrix(time.year, time.month, cal);`);
 

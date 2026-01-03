@@ -108,7 +108,7 @@
         const postfix = props.postfix || "";
 
         // Full display value with unit, prefix and postfix
-        const fullValue = `${prefix}${displayValue}${displayUnit}${postfix}`.trim();
+        const fullValue = `${prefix}${displayValue}${displayUnit ? " " + displayUnit : ""}${postfix}`.trim();
 
         // Clear element
         el.innerHTML = "";

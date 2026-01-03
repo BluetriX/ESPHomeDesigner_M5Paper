@@ -40,7 +40,7 @@
 
         const dayName = document.createElement("div");
         dayName.style.position = "absolute";
-        dayName.style.top = "75px";
+        dayName.style.top = "60px";
         dayName.style.left = "0";
         dayName.style.right = "0";
         dayName.style.textAlign = "center";
@@ -51,7 +51,7 @@
 
         const dateLine = document.createElement("div");
         dateLine.style.position = "absolute";
-        dateLine.style.top = "102px";
+        dateLine.style.top = "92px";
         dateLine.style.left = "0";
         dateLine.style.right = "0";
         dateLine.style.textAlign = "center";
