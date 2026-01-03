@@ -80,7 +80,7 @@
             labelEl.style.fontSize = `${labelFontSize}px`;
             labelEl.style.opacity = "0.7";
             labelEl.style.marginTop = "1px";
-            labelEl.textContent = "Temperature";
+            labelEl.textContent = props.title || widget.title || "Temperature";
             el.appendChild(labelEl);
         }
     };

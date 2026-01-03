@@ -2224,7 +2224,9 @@ async function generateSnippetLocally() {
                                 sensorId = entityId ? entityId.replace(/^sensor\./, "").replace(/\./g, "_").replace(/-/g, "_") : "sht4x_temperature";
                             }
 
-                            lines.push(`        // widget:ondevice_temperature id:${w.id} x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId || sensorId} icon_size:${iconSize} font_size:${fontSize} color:${colorProp} local:${isLocal} fit:${p.fit_icon_to_frame ? "true" : "false"} ${getCondProps(w)}`);
+                            // Store title for round-trip persistence
+                            const title = (w.title || "Temperature").replace(/"/g, '\\"');
+                            lines.push(`        // widget:ondevice_temperature id:${w.id} x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId || sensorId} icon_size:${iconSize} font_size:${fontSize} label_font_size:${labelFontSize} color:${colorProp} local:${isLocal} unit:"${unit}" precision:${precision} show_label:${showLabel} title:"${title}" fit:${p.fit_icon_to_frame ? "true" : "false"} ${getCondProps(w)}`);
                             lines.push(`        {`);
                             lines.push(`          const char* temp_icon = "\\U000F050F"; // Default: thermometer`);
                             lines.push(`          float temp_val = NAN;`);
@@ -2237,13 +2239,19 @@ async function generateSnippetLocally() {
                             lines.push(`          it.printf(${Math.round(w.x + w.width / 2)}, ${w.y}, id(${iconFontRef}), ${color}, TextAlign::TOP_CENTER, "%s", temp_icon);`);
                             // Value below icon
                             lines.push(`          if (id(${sensorId}).has_state()) {`);
-                            lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "%.${precision}f${unit}", id(${sensorId}).state);`);
+                            if (unit === "°F") {
+                                lines.push(`            float temp_c = id(${sensorId}).state;`);
+                                lines.push(`            float temp_f = (temp_c * 9.0/5.0) + 32.0;`);
+                                lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "%.${precision}f${unit}", temp_f);`);
+                            } else {
+                                lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "%.${precision}f${unit}", id(${sensorId}).state);`);
+                            }
                             lines.push(`          } else {`);
                             lines.push(`            it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + 2}, id(${valueFontRef}), ${color}, TextAlign::TOP_CENTER, "--${unit}");`);
                             lines.push(`          }`);
                             // Label below value
                             if (showLabel) {
-                                lines.push(`          it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + fontSize + 4}, id(${labelFontRef}), ${color}, TextAlign::TOP_CENTER, "Temperature");`);
+                                lines.push(`          it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + fontSize + 4}, id(${labelFontRef}), ${color}, TextAlign::TOP_CENTER, "${title}");`);
                             }
                             // Apply grey dithering if color is gray
                             if (colorProp.toLowerCase() === "gray") {
@@ -2282,7 +2290,9 @@ async function generateSnippetLocally() {
                                 sensorId = entityId ? entityId.replace(/^sensor\./, "").replace(/\./g, "_").replace(/-/g, "_") : "sht4x_humidity";
                             }
 
-                            lines.push(`        // widget:ondevice_humidity id:${w.id} x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId || sensorId} icon_size:${iconSize} font_size:${fontSize} color:${colorProp} local:${isLocal} fit:${p.fit_icon_to_frame ? "true" : "false"} ${getCondProps(w)}`);
+                            // Store title for round-trip persistence
+                            const title = (w.title || "Humidity").replace(/"/g, '\\"');
+                            lines.push(`        // widget:ondevice_humidity id:${w.id} x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId || sensorId} icon_size:${iconSize} font_size:${fontSize} label_font_size:${labelFontSize} color:${colorProp} local:${isLocal} unit:"${unit}" precision:${precision} show_label:${showLabel} title:"${title}" fit:${p.fit_icon_to_frame ? "true" : "false"} ${getCondProps(w)}`);
                             lines.push(`        {`);
                             lines.push(`          const char* hum_icon = "\\U000F058E"; // Default: water-percent`);
                             lines.push(`          float hum_val = NAN;`);
@@ -2301,7 +2311,7 @@ async function generateSnippetLocally() {
                             lines.push(`          }`);
                             // Label below value
                             if (showLabel) {
-                                lines.push(`          it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + fontSize + 4}, id(${labelFontRef}), ${color}, TextAlign::TOP_CENTER, "Humidity");`);
+                                lines.push(`          it.printf(${Math.round(w.x + w.width / 2)}, ${w.y + iconSize + fontSize + 4}, id(${labelFontRef}), ${color}, TextAlign::TOP_CENTER, "${title}");`);
                             }
                             // Apply grey dithering if color is gray
                             if (colorProp.toLowerCase() === "gray") {
@@ -2374,8 +2384,18 @@ async function generateSnippetLocally() {
                                     const tempId = profile.features.sht4x ? "sht4x_temperature" : (profile.features.sht3x ? "sht3x_temperature" : "shtc3_temperature");
                                     lines.push(`          {`);
                                     lines.push(`            it.printf(${Math.round(currentX)} - 12, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_LEFT, "\\U000F050F");`);
-                                    lines.push(`            if (id(${tempId}).has_state()) it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.1f°C", id(${tempId}).state);`);
-                                    lines.push(`            else it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--°C");`);
+                                    if ((p.temperature_unit === "F")) {
+                                        lines.push(`            if (id(${tempId}).has_state()) {`);
+                                        lines.push(`              float t_c = id(${tempId}).state;`);
+                                        lines.push(`              float t_f = (t_c * 9.0/5.0) + 32.0;`);
+                                        lines.push(`              it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.1f°F", t_f);`);
+                                        lines.push(`            } else {`);
+                                        lines.push(`              it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--°F");`);
+                                        lines.push(`            }`);
+                                    } else {
+                                        lines.push(`            if (id(${tempId}).has_state()) it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.1f°C", id(${tempId}).state);`);
+                                        lines.push(`            else it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--°C");`);
+                                    }
                                     lines.push(`          }`);
                                     currentX += spacing;
                                 }
@@ -2749,53 +2769,72 @@ async function generateSnippetLocally() {
                             const esphomeAlign = `TextAlign::${textAlign}`;
 
                             if (wordWrap) {
-                                lines.push(`          // Word wrap implementation`);
-                                lines.push(`          int max_width = ${w.width - 16};`);
-                                lines.push(`          int line_height = ${quoteFontSize + 4};`);
-                                lines.push(`          int y_pos = ${w.y + 8};`);
-                                lines.push(`          std::string display_text = "\\"" + quote_text + "\\"";`);
+                                lines.push(`          // Word wrap with caching for performance`);
+                                lines.push(`          static std::string last_text = "";`);
+                                lines.push(`          static std::vector<std::string> cached_lines;`);
+                                lines.push(`          static esphome::font::Font *cached_font = nullptr;`);
+                                lines.push(`          static int cached_lh = 0;`);
+                                lines.push(`          `);
+                                lines.push(`          bool recalc = (quote_text != last_text);`);
+                                lines.push(`          if (recalc) {`);
+                                lines.push(`              last_text = quote_text;`);
+                                lines.push(`              cached_lines.clear();`);
+                                lines.push(`              std::string display_text = "\\"" + quote_text + "\\"";`);
+                                lines.push(`              int max_width = ${w.width - 16};`);
 
-                                lines.push(`          auto print_quote = [&](esphome::font::Font *font, int line_h, bool draw) -> int {`);
-                                lines.push(`            int y_curr = ${w.y + 8};`); // Reset y_start logic local to lambda
-                                lines.push(`            std::string current_line = "";`);
-                                lines.push(`            size_t pos = 0; size_t space_pos;`);
-                                lines.push(`            while ((space_pos = display_text.find(' ', pos)) != std::string::npos) {`);
-                                lines.push(`                std::string word = display_text.substr(pos, space_pos - pos);`);
-                                lines.push(`                std::string test_line = current_line.empty() ? word : current_line + " " + word;`);
-                                lines.push(`                int w, h, xoff, bl;`);
-                                lines.push(`                font->measure(test_line.c_str(), &w, &xoff, &bl, &h);`);
-                                lines.push(`                if (w > max_width && !current_line.empty()) {`);
-                                lines.push(`                    if (draw) it.printf(${w.x + 8}, y_curr, font, ${color}, "%s", current_line.c_str());`);
-                                lines.push(`                    y_curr += line_h;`);
-                                lines.push(`                    current_line = word;`);
-                                lines.push(`                } else { current_line = test_line; }`);
-                                lines.push(`                pos = space_pos + 1;`);
-                                lines.push(`            }`);
-                                lines.push(`            if (!current_line.empty()) {`);
-                                lines.push(`                std::string rem = display_text.substr(pos);`);
-                                lines.push(`                if (!current_line.empty()) current_line += " "; current_line += rem;`);
-                                lines.push(`            }`);
-                                lines.push(`            if (!current_line.empty()) {`);
-                                lines.push(`                if (draw) it.printf(${w.x + 8}, y_curr, font, ${color}, "%s", current_line.c_str());`);
-                                lines.push(`                y_curr += line_h;`);
-                                lines.push(`            }`);
-                                lines.push(`            return y_curr - ${w.y + 8};`);
-                                lines.push(`          };`);
+                                // Helper lambda inside to calculate lines
+                                lines.push(`              auto calculate_lines = [&](esphome::font::Font *font, int line_h) -> int {`);
+                                lines.push(`                  cached_lines.clear();`);
+                                lines.push(`                  std::string current_line = "";`);
+                                lines.push(`                  size_t pos = 0; size_t space_pos;`);
+                                lines.push(`                  while ((space_pos = display_text.find(' ', pos)) != std::string::npos) {`);
+                                lines.push(`                      std::string word = display_text.substr(pos, space_pos - pos);`);
+                                lines.push(`                      std::string test_line = current_line.empty() ? word : current_line + " " + word;`);
+                                lines.push(`                      int w, h, xoff, bl;`);
+                                lines.push(`                      font->measure(test_line.c_str(), &w, &xoff, &bl, &h);`);
+                                lines.push(`                      if (w > max_width && !current_line.empty()) {`);
+                                lines.push(`                          cached_lines.push_back(current_line);`);
+                                lines.push(`                          current_line = word;`);
+                                lines.push(`                      } else { current_line = test_line; }`);
+                                lines.push(`                      pos = space_pos + 1;`);
+                                lines.push(`                  }`);
+                                lines.push(`                  if (!current_line.empty()) {`);
+                                lines.push(`                      std::string rem = display_text.substr(pos);`);
+                                lines.push(`                      if (!current_line.empty()) current_line += " "; current_line += rem;`);
+                                lines.push(`                      cached_lines.push_back(current_line);`);
+                                lines.push(`                  }`);
+                                // Calculate total height
+                                lines.push(`                  return cached_lines.size() * line_h;`);
+                                lines.push(`              };`);
 
                                 if (autoScale) {
-                                    lines.push(`          esphome::font::Font *selected_font = id(${quoteFontId1});`);
-                                    lines.push(`          int lh = ${parseInt(quoteFontSize * 1.3)};`);
-                                    lines.push(`          if (print_quote(selected_font, lh, false) > ${w.height - 30}) {`);
-                                    lines.push(`             selected_font = id(${quoteFontId2}); lh = ${parseInt(quoteFontSize * 0.75 * 1.3)};`);
-                                    lines.push(`             if (print_quote(selected_font, lh, false) > ${w.height - 30}) {`);
-                                    lines.push(`                 selected_font = id(${quoteFontId3}); lh = ${parseInt(quoteFontSize * 0.5 * 1.3)};`);
-                                    lines.push(`             }`);
-                                    lines.push(`          }`);
-                                    lines.push(`          int final_h = print_quote(selected_font, lh, true);`);
+                                    lines.push(`              // Auto-scale Logic`);
+                                    lines.push(`              cached_font = id(${quoteFontId1});`);
+                                    lines.push(`              cached_lh = ${parseInt(quoteFontSize * 1.3)};`);
+                                    lines.push(`              if (calculate_lines(cached_font, cached_lh) > ${w.height - 30}) {`);
+                                    lines.push(`                 cached_font = id(${quoteFontId2}); cached_lh = ${parseInt(quoteFontSize * 0.75 * 1.3)};`);
+                                    lines.push(`                 if (calculate_lines(cached_font, cached_lh) > ${w.height - 30}) {`);
+                                    lines.push(`                     cached_font = id(${quoteFontId3}); cached_lh = ${parseInt(quoteFontSize * 0.5 * 1.3)};`);
+                                    lines.push(`                     calculate_lines(cached_font, cached_lh); // Final calc`);
+                                    lines.push(`                 }`);
+                                    lines.push(`              }`);
                                 } else {
-                                    lines.push(`          int final_h = print_quote(id(${quoteFontId1}), ${quoteFontSize + 4}, true);`);
+                                    lines.push(`              cached_font = id(${quoteFontId1});`);
+                                    lines.push(`              cached_lh = ${quoteFontSize + 4};`);
+                                    lines.push(`              calculate_lines(cached_font, cached_lh);`);
                                 }
+                                lines.push(`          }`); // End recalc
 
+                                // Draw using cached values
+                                lines.push(`          int y_curr = ${w.y + 8};`);
+                                lines.push(`          if (cached_font != nullptr) {`);
+                                lines.push(`              for (auto &line : cached_lines) {`);
+                                lines.push(`                  it.printf(${w.x + 8}, y_curr, cached_font, ${color}, "%s", line.c_str());`);
+                                lines.push(`                  y_curr += cached_lh;`);
+                                lines.push(`              }`);
+                                lines.push(`          }`);
+
+                                // Draw Author
                                 if (showAuthor) {
                                     lines.push(`          if (!quote_author.empty()) it.printf(${w.x + 8}, ${w.y} + ${w.height} - ${authorFontSize}, id(${authorFontId}), ${color}, "— %s", quote_author.c_str());`);
                                 }
@@ -3373,7 +3412,7 @@ function generateChangePageScript(pages, displayId, autoCycleEnabled = false) {
     lines.push("          if (id(display_page) != target) {");
     lines.push("            id(display_page) = target;");
     lines.push("            id(last_page_switch_time) = millis();");
-    lines.push(`            id(${displayId}).update();`);
+    lines.push(`            // id(${displayId}).update();`);
     lines.push("            ESP_LOGI(\"display\", \"Switched to page %d\", target);");
     lines.push("            // Restart refresh logic");
     lines.push("            if (id(manage_run_and_sleep).is_running()) id(manage_run_and_sleep).stop();");
