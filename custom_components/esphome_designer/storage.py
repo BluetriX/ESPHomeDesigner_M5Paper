@@ -118,7 +118,7 @@ class DashboardStorage:
             results.append({
                 "id": dev_id,
                 "name": device.name,
-                "pages": len(device.pages),
+                "page_count": len(device.pages),
                 "device_model": device.device_model
             })
         return results

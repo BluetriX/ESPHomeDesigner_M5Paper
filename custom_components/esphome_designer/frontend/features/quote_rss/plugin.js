@@ -33,7 +33,7 @@ const render = (element, widget, helpers) => {
     const sample = sampleQuotes[Math.abs(hash) % sampleQuotes.length];
 
     const isOfflineMode = window.location.protocol === "file:" ||
-        (typeof window.hasHaBackend === "function" && !window.hasHaBackend());
+        (typeof window.hasHaBackend !== "function") || !window.hasHaBackend();
 
     window.quoteCache = window.quoteCache || {};
     window.quoteFetchTimers = window.quoteFetchTimers || {};
@@ -60,31 +60,10 @@ const render = (element, widget, helpers) => {
             try {
                 let data;
                 if (isOfflineMode) {
-                    const corsProxy = "https://api.allorigins.win/get?url=";
-                    const response = await fetch(corsProxy + encodeURIComponent(fetchFeedUrl));
-                    const result = await response.json();
-
-                    if (result.contents) {
-                        const parser = new DOMParser();
-                        const xml = parser.parseFromString(result.contents, "text/xml");
-                        const items = xml.querySelectorAll("item");
-
-                        if (items.length > 0) {
-                            const item = items[Math.floor(Math.random() * items.length)];
-                            let quoteText = item.querySelector("title")?.textContent || "";
-                            let author = "";
-                            const creator = item.querySelector("creator");
-                            if (creator) author = creator.textContent || "";
-                            if (!author && quoteText.includes(" - ")) {
-                                const parts = quoteText.split(" - ");
-                                if (parts.length >= 2) {
-                                    author = parts.pop();
-                                    quoteText = parts.join(" - ");
-                                }
-                            }
-                            data = { success: true, quote: { quote: quoteText.trim(), author: author.trim() } };
-                        }
-                    }
+                    // Skip fetch in offline mode to prevent browser-level DNS errors
+                    // which cannot be silenced by JavaScript try/catch.
+                    // Widget will display sample quote instead.
+                    data = null;
                 } else {
                     const response = await fetch(`/api/esphome_designer/rss_proxy?url=${encodeURIComponent(fetchFeedUrl)}`);
                     data = await response.json();
@@ -97,7 +76,7 @@ const render = (element, widget, helpers) => {
                     }
                 }
             } catch (e) {
-                console.warn("[Quote Widget] Fetch Error:", e);
+                // console.debug("[Quote Widget] Fetch Error:", e);
             } finally {
                 window.quoteCache[fetchFetchingKey] = false;
                 window.quoteFetchTimers[widget.id] = null;
@@ -199,7 +178,9 @@ export default {
         text_align: "TOP_LEFT",
         show_author: true,
         italic_quote: true,
-        word_wrap: true
+        word_wrap: true,
+        width: 400,
+        height: 120
     },
     render
 };

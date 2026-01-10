@@ -237,7 +237,7 @@ const onExportTextSensors = (context) => {
     lines.push("#       - trigger: state");
     lines.push(`#         entity_id: ${weatherEntity}`);
     lines.push("#       - trigger: time_pattern");
-    lines.push("#         hours: \"/1\"");
+    lines.push("#         hours: '/1'");
     lines.push("#     action:");
     lines.push("#       - action: weather.get_forecasts");
     lines.push("#         target:");

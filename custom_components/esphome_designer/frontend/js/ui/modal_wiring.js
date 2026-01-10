@@ -1,4 +1,5 @@
 import { Logger } from '../utils/logger.js';
+import { AppState } from '../core/state.js';
 
 // Modal Button Wiring - Matches reference implementation
 // This file must be loaded AFTER all modal elements exist in the DOM

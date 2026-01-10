@@ -63,7 +63,7 @@ const render = (el, widget, { getColorStyle }) => {
                             return numVal.toString();
                         }
                     }
-                    return strState.replace(/\s*[°%]?[A-Za-z\/²³]+\s*$/, '').trim() || strState;
+                    return strState.replace(/\s*[°%]?[A-Za-z/²³]+\s*$/, '').trim() || strState;
                 }
                 return strState;
             }

@@ -244,7 +244,8 @@ export class App {
 
 // Start the app
 document.addEventListener('DOMContentLoaded', () => {
-    window.app = new App();
+    const app = new App();
+    window.app = app;
 
     // Expose modal functions globally for button event listeners (matches old monolithic pattern)
     // Exposed globals for legacy/external compatibility

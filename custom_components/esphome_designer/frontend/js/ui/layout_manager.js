@@ -5,6 +5,12 @@
  */
 
 import { Logger } from '../utils/logger.js';
+import { DEVICE_PROFILES, SUPPORTED_DEVICE_IDS } from '../io/devices.js';
+import { getHaHeaders } from '../io/ha_api.js';
+import { hasHaBackend, HA_API_BASE } from '../utils/env.js';
+import { AppState } from '../core/state.js';
+import { loadLayoutIntoState } from '../io/yaml_import.js';
+import { emit, EVENTS } from '../core/events.js';
 
 class LayoutManager {
     constructor() {
@@ -424,7 +430,7 @@ class LayoutManager {
 
     generateDeviceOptions() {
         if (DEVICE_PROFILES) {
-            const supportedIds = window.SUPPORTED_DEVICE_IDS || [];
+            const supportedIds = SUPPORTED_DEVICE_IDS || [];
             return Object.entries(DEVICE_PROFILES).map(([key, profile]) => {
                 let displayName = profile.name;
                 if (!supportedIds.includes(key)) {

@@ -3,10 +3,13 @@ import fs from 'fs';
 import path from 'path';
 import { JSDOM } from 'jsdom';
 import { GOLDEN_PAYLOAD } from '../golden_master/golden_payload.js';
+import { ESPHomeAdapter } from '../../js/io/adapters/esphome_adapter.js';
 
 // Paths
-const LEGACY_FRONTEND = path.resolve(__dirname, '../../../../../saftybackup-ofversionbeforethecleanup_/frontend');
-const MODERN_FRONTEND = path.resolve(__dirname, '..');
+// Using the verified legacy path found in oldversions/0.8.6.1 saftybackup-ofversionbeforethecleanup
+// Need 6 levels of '..' to reach Codebasecleanup root from custom_components/esphome_designer/frontend/tests/legacy
+const LEGACY_FRONTEND = path.resolve(__dirname, '../../../../../../oldversions/0.8.6.1 saftybackup-ofversionbeforethecleanup/frontend');
+const MODERN_FRONTEND = path.resolve(__dirname, '../..');
 
 describe('Time Machine: Legacy vs Modern YAML Comparison', () => {
     let legacyYaml = "";
@@ -48,15 +51,21 @@ describe('Time Machine: Legacy vs Modern YAML Comparison', () => {
             for (const dep of deps) {
                 const file = path.resolve(LEGACY_FRONTEND, dep);
                 if (fs.existsSync(file)) {
+                    console.log(`[Time Machine] Loading Legacy Dep: ${dep}`);
                     const code = fs.readFileSync(file, 'utf-8');
-                    const script = window.document.createElement('script');
-                    script.textContent = code;
-                    window.document.head.appendChild(script);
+                    try {
+                        window.eval(code);
+                    } catch (err) {
+                        console.error(`[Time Machine] Failed to eval legacy script ${dep}:`, err);
+                    }
+                } else {
+                    console.warn(`[Time Machine] Legacy dependency missing: ${file}`);
                 }
             }
 
             if (typeof window.generateSnippetLocally !== 'function') {
-                throw new Error("Legacy generateSnippetLocally not found on window");
+                console.log("[Time Machine] Window keys:", Object.keys(window).filter(k => k.includes("generate")));
+                throw new Error("Legacy generateSnippetLocally not found on window after eval");
             }
 
             return await window.generateSnippetLocally();
@@ -69,62 +78,30 @@ describe('Time Machine: Legacy vs Modern YAML Comparison', () => {
             throw e;
         }
 
-        // --- RUN MODERN (Uses Vitest window) ---
+        // --- RUN MODERN (Uses standard ES imports) ---
         const runModern = async () => {
             console.log("[Time Machine] Running Modern Generator...");
 
-            // Mock Vitest Globals
+            // Setup Vitest window globals expected by the adapter/plugins
+            // These allow the modern adapter to run in the Vitest environment
             window.AppState = {
                 getPagesPayload: () => JSON.parse(JSON.stringify(GOLDEN_PAYLOAD)),
                 getCanvasDimensions: () => ({ width: 800, height: 480 }),
-                getCanvasShape: () => "rectangle"
+                getCanvasShape: () => "rectangle",
+                deviceModel: "reterminal_e1001"
             };
             window.getDeviceModel = () => "reterminal_e1001";
+            window.DEVICE_PROFILES = {};
             window.fetch = vi.fn().mockResolvedValue({
                 ok: true,
                 text: async () => "# Mock Hardware Package",
                 json: async () => ({})
             });
 
-            // 1. Core
-            const coreFiles = [
-                'js/core/layout_constants.js',
-                'js/utils/helpers.js',
-                'js/core/utils.js',
-                'js/core/plugin_registry.js',
-                'js/io/adapters/base_adapter.js',
-                'js/io/adapters/esphome_adapter.js',
-                'js/io/yaml_export.js',
-                'js/io/yaml_export_lvgl.js',
-                'js/io/hardware_generators.js',
-                'js/io/devices.js'
-            ];
-            for (const f of coreFiles) {
-                const code = fs.readFileSync(path.resolve(MODERN_FRONTEND, f), 'utf-8');
-                try {
-                    (0, eval)(code);
-                } catch (e) {
-                    throw new Error(`Eval failed for modern core file ${f}: ${e.message}`);
-                }
-            }
-
-            // 2. Load all Plugins
-            const featuresPath = path.resolve(MODERN_FRONTEND, 'features');
-            const entries = fs.readdirSync(featuresPath);
-            for (const entry of entries) {
-                const pluginDir = path.resolve(featuresPath, entry);
-                if (fs.statSync(pluginDir).isDirectory()) {
-                    // Try to find *_plugin.js
-                    const files = fs.readdirSync(pluginDir);
-                    const pluginFileMatch = files.find(f => f.endsWith('_plugin.js'));
-                    if (pluginFileMatch) {
-                        const pluginCode = fs.readFileSync(path.resolve(pluginDir, pluginFileMatch), 'utf-8');
-                        (0, eval)(pluginCode);
-                    }
-                }
-            }
-
-            return await window.generateSnippetLocally();
+            // The adapter will dynamically load plugins via import()
+            // Vitest handles this automatically for files within the project.
+            const adapter = new ESPHomeAdapter();
+            return await adapter.generate(GOLDEN_PAYLOAD);
         };
 
         try {
@@ -149,14 +126,16 @@ describe('Time Machine: Legacy vs Modern YAML Comparison', () => {
         const modernNorm = normalize(modernYaml);
 
         if (legacyNorm !== modernNorm) {
-            fs.writeFileSync(path.resolve(__dirname, 'legacy_output.yaml'), legacyYaml);
-            fs.writeFileSync(path.resolve(__dirname, 'modern_output.yaml'), modernYaml);
+            // Write debug files for comparison
+            const debugDir = path.resolve(__dirname, '../debug');
+            if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir);
 
-            // Also write normalized versions to see exactly what differs
-            fs.writeFileSync(path.resolve(__dirname, 'legacy_norm.yaml'), legacyNorm);
-            fs.writeFileSync(path.resolve(__dirname, 'modern_norm.yaml'), modernNorm);
+            fs.writeFileSync(path.resolve(debugDir, 'legacy_output.yaml'), legacyYaml);
+            fs.writeFileSync(path.resolve(debugDir, 'modern_output.yaml'), modernYaml);
+            fs.writeFileSync(path.resolve(debugDir, 'legacy_norm.yaml'), legacyNorm);
+            fs.writeFileSync(path.resolve(debugDir, 'modern_norm.yaml'), modernNorm);
 
-            console.log("YAML mismatch! Details written to tests/legacy_output.yaml and modern_output.yaml");
+            console.log(`YAML mismatch! Details written to ${debugDir}`);
         }
 
         expect(modernNorm).toBe(legacyNorm);

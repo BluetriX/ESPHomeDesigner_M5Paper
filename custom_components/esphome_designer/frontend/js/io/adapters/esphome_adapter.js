@@ -48,8 +48,10 @@ export class ESPHomeAdapter extends BaseAdapter {
         const pages = layout.pages || [];
         const model = layout.device_model || (AppState ? AppState.deviceModel : null) || window.currentDeviceModel || "reterminal_e1001";
 
-        const profiles = window.DEVICE_PROFILES || DEVICE_PROFILES || {};
+        const profiles = DEVICE_PROFILES || window.DEVICE_PROFILES || {};
         let profile = profiles[model] || {};
+        // console.log(`[ESPHomeAdapter] Model: ${model}`);
+        // console.log(`[ESPHomeAdapter] Profile features:`, JSON.stringify(profile.features));
 
         // Custom Hardware Synthesis:
         // If the model is 'custom', we synthesize a profile from the custom hardware settings
@@ -104,12 +106,6 @@ export class ESPHomeAdapter extends BaseAdapter {
                 if (page.widgets) {
                     for (const w of page.widgets.filter(widget => !widget.hidden)) {
                         if (w.type.startsWith("lvgl_")) {
-                            isLvgl = true;
-                            break;
-                        }
-                        // Check if plugin has LVGL export capabilities
-                        const plugin = PluginRegistry ? PluginRegistry.get(w.type) : null;
-                        if (plugin && typeof plugin.exportLVGL === 'function') {
                             isLvgl = true;
                             break;
                         }
@@ -187,7 +183,10 @@ export class ESPHomeAdapter extends BaseAdapter {
                 // HTTP Request first
                 lines.push("http_request:", "  verify_ssl: false", "  timeout: 20s");
 
-                if (Generators.generateI2CSection) lines.push(...Generators.generateI2CSection(profile));
+                if (Generators.generateI2CSection) {
+                    lines.push(...Generators.generateI2CSection(profile));
+                }
+
                 if (Generators.generateSPISection) lines.push(...Generators.generateSPISection(profile));
                 if (Generators.generateExtraComponents) lines.push(...Generators.generateExtraComponents(profile));
                 if (Generators.generateAXP2101Section) lines.push(...Generators.generateAXP2101Section(profile));

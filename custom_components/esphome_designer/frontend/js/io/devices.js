@@ -52,6 +52,7 @@ export const DEVICE_PROFILES = {
       buzzer: true,
       buttons: true,
       sht4x: true,
+      epaper: true,
       inverted_colors: true
     }
   },
@@ -80,7 +81,8 @@ export const DEVICE_PROFILES = {
       psram: true,
       buzzer: true,
       buttons: true,
-      sht4x: true
+      sht4x: true,
+      epaper: true
     }
   },
   trmnl_diy_esp32s3: {

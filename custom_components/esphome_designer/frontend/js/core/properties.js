@@ -1027,7 +1027,7 @@ export class PropertiesPanel {
             this.addLabeledInput("Max Events", "number", props.max_events || 8, (v) => updateProp("max_events", parseInt(v, 10)));
             this.addHint("Must be a sensor with attribute 'entries'");
 
-            // Helper Script Download
+            // Helper Script Download Button & Note
             const dlBtn = document.createElement("button");
             dlBtn.className = "btn btn-secondary btn-full";
             dlBtn.textContent = "Download Helper Script";
@@ -1043,6 +1043,14 @@ export class PropertiesPanel {
             });
             this.panel.appendChild(dlBtn);
             this.addHint("Place in /config/python_scripts/");
+
+            const note = document.createElement("div");
+            note.style.marginTop = "5px";
+            note.style.fontSize = "10px";
+            note.style.color = "#888";
+            note.style.textAlign = "center";
+            note.innerText = "Check widget instructions for HA setup.";
+            this.panel.appendChild(note);
         }
         else if (type === "puppet") {
             this.addLabeledInput("File path / URL", "text", props.image_url || "", (v) => updateProp("image_url", v));
@@ -1338,60 +1346,6 @@ export class PropertiesPanel {
                 this.addColorMixer("Track Color", props.bg_color || "gray", (v) => updateProp("bg_color", v));
                 this.addLabeledInput("Border Width", "number", props.border_width || 2, (v) => updateProp("border_width", parseInt(v, 10)));
                 this.addSelect("Mode", props.mode || "NORMAL", ["NORMAL", "SYMMETRICAL", "REVERSE"], (v) => updateProp("mode", v));
-            }
-            else if (type === "calendar") {
-                this.addHint("📅 Displays a monthly calendar and agenda.");
-                this.addHint("⚠️ Requires 'esp_calendar_data_conversion.py' setup in Home Assistant.");
-
-                this.addLabeledInputWithPicker("Data Entity ID", "text", widget.props.entity_id || "sensor.esp_calendar_data", (v) => {
-                    const newProps = { ...widget.props, entity_id: v };
-                    AppState.updateWidget(widget.id, { props: newProps });
-                }, widget);
-                this.addLabeledInput("Max Events", "number", props.max_events || 8, (v) => updateProp("max_events", parseInt(v, 10)));
-
-                this.addSectionLabel("Appearance");
-                this.addCheckbox("Show Border", props.show_border !== false, (v) => updateProp("show_border", v));
-                this.addLabeledInput("Border Width", "number", props.border_width || 2, (v) => updateProp("border_width", parseInt(v, 10)));
-                this.addColorSelector("Border Color", props.border_color || "black", colors, (v) => updateProp("border_color", v));
-                this.addColorSelector("Background Color", props.background_color || "white", colors, (v) => updateProp("background_color", v));
-                this.addColorSelector("Text Color", props.text_color || "black", colors, (v) => updateProp("text_color", v));
-
-                this.addSectionLabel("Font Sizes");
-                this.addLabeledInput("Big Date Size", "number", props.font_size_date || 100, (v) => updateProp("font_size_date", parseInt(v, 10)));
-                this.addLabeledInput("Day Name Size", "number", props.font_size_day || 24, (v) => updateProp("font_size_day", parseInt(v, 10)));
-                this.addLabeledInput("Grid Text Size", "number", props.font_size_grid || 14, (v) => updateProp("font_size_grid", parseInt(v, 10)));
-                this.addLabeledInput("Event Text Size", "number", props.font_size_event || 18, (v) => updateProp("font_size_event", parseInt(v, 10)));
-
-                // Add "Download Helper Script" button
-                const container = this.panel; // Or create a sub-container
-                const downloadBtn = document.createElement("button");
-                downloadBtn.className = "action-btn"; // Assuming this class exists or button basic style
-                downloadBtn.style.marginTop = "15px";
-                downloadBtn.style.width = "100%";
-                downloadBtn.style.cursor = "pointer";
-                downloadBtn.style.padding = "8px";
-                downloadBtn.innerHTML = "📥 Download Helper Script";
-
-                downloadBtn.onclick = () => {
-                    const blob = new Blob([CALENDAR_HELPER_SCRIPT], { type: "text/x-python" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = "esp_calendar_data_conversion.py";
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                };
-                container.appendChild(downloadBtn);
-
-                const note = document.createElement("div");
-                note.style.marginTop = "5px";
-                note.style.fontSize = "10px";
-                note.style.color = "#888";
-                note.style.textAlign = "center";
-                note.innerText = "Check widget instructions for HA setup.";
-                container.appendChild(note);
             }
             else if (type === "lvgl_tabview") {
                 this.addLabeledInput("Tabs (comma separated)", "text", (props.tabs || []).join(", "), (v) => {

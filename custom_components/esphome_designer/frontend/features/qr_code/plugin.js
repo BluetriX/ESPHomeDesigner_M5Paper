@@ -2,6 +2,8 @@
  * QR Code Plugin
  */
 
+
+
 const exportLVGL = (w, { common, convertColor }) => {
     const p = w.props || {};
     return {

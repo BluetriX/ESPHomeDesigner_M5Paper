@@ -51,7 +51,7 @@ const render = (el, widget, { getColorStyle }) => {
                 el.addEventListener("mouseenter", () => {
                     iconEl.innerText = pressedChar;
                     if (props.color && props.color.startsWith("rgba")) {
-                        el.style.backgroundColor = props.color.replace(/[\d\.]+\)$/, "0.4)");
+                        el.style.backgroundColor = props.color.replace(/[\d.]+\)$/, "0.4)");
                     } else {
                         el.style.backgroundColor = "rgba(0, 0, 255, 0.4)";
                     }

@@ -15,12 +15,12 @@ let isAutoHighlight = false;
 // This handles the "smart delete/copy" when snippet box is focused
 Object.defineProperty(window, 'lastHighlightRange', {
     get: () => lastHighlightRange,
-    set: (val) => { lastHighlightRange = val; },
+    set: function (val) { lastHighlightRange = val; },
     configurable: true
 });
 Object.defineProperty(window, 'isAutoHighlight', {
     get: () => isAutoHighlight,
-    set: (val) => { isAutoHighlight = val; },
+    set: function (val) { isAutoHighlight = val; },
     configurable: true
 });
 

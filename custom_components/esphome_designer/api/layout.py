@@ -60,7 +60,7 @@ class ReTerminalLayoutView(DesignerBaseView):
         """Return the default device/layout, creating if necessary."""
         device = await self.storage.async_get_layout_default()
         if device is None:
-            device = DeviceConfig(id="default", name="Default Layout", pages=[])
+            device = DeviceConfig(device_id="default", api_token="", name="Default Layout", pages=[])
             await self.storage.async_save_layout_default(device)
         return device
 
@@ -76,7 +76,10 @@ class ReTerminalLayoutsListView(DesignerBaseView):
     async def get(self, request) -> Any:
         """List all layouts."""
         layouts = await self.storage.async_list_layouts()
-        return self.json(layouts)
+        last_active = None
+        if self.storage._state and self.storage._state.last_active_layout_id:
+            last_active = self.storage._state.last_active_layout_id
+        return self.json({"layouts": layouts, "last_active_layout_id": last_active})
 
     async def post(self, request) -> Any:
         """Create a new layout."""
@@ -95,7 +98,8 @@ class ReTerminalLayoutsListView(DesignerBaseView):
                  return self.json({"error": "already_exists"}, HTTPStatus.CONFLICT)
 
             new_layout = DeviceConfig(
-                id=layout_id,
+                device_id=layout_id,
+                api_token="",
                 name=body.get("name", layout_id),
                 pages=[]
             )
