@@ -106,6 +106,11 @@ class AppStateFacade {
         this.recordHistory();
     }
 
+    deletePage(index) {
+        this.project.deletePage(index);
+        this.recordHistory();
+    }
+
     selectWidget(id, multi) { this.editor.selectWidget(id, multi); }
     selectWidgets(ids) { this.editor.setSelectedWidgetIds(ids); }
 

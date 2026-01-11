@@ -217,15 +217,7 @@ export class Sidebar {
                 delBtn.style.color = "var(--danger)";
                 delBtn.onclick = (e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete page "${page.name}"?`)) {
-                        AppState.state.pages.splice(index, 1);
-                        if (AppState.currentPageIndex >= AppState.pages.length) {
-                            AppState.setCurrentPageIndex(AppState.pages.length - 1);
-                        } else {
-                            // Force update if index didn't change but content did
-                            AppState.setPages(AppState.pages);
-                        }
-                    }
+                    this.handlePageDelete(index, page);
                 };
                 actions.appendChild(delBtn);
             }
@@ -315,6 +307,54 @@ export class Sidebar {
                 modal.style.display = "flex";
             }
         }
+    }
+
+    handlePageDelete(index, page) {
+        // Use custom modal instead of native confirm
+        const modal = document.createElement('div');
+        modal.className = 'modal-backdrop';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+            <div class="modal" style="width: 320px; height: auto; min-height: 150px; padding: var(--space-4);">
+                <div class="modal-header" style="font-size: var(--fs-md); padding-bottom: var(--space-2);">
+                    <div>Delete Page</div>
+                </div>
+                <div class="modal-body" style="padding: var(--space-2) 0;">
+                    <p style="margin-bottom: var(--space-3); font-size: var(--fs-sm);">
+                        Are you sure you want to delete the page <b>"${page.name}"</b>?
+                        <br><br>
+                        This action cannot be undone.
+                    </p>
+                </div>
+                <div class="modal-actions" style="padding-top: var(--space-3); border-top: 1px solid var(--border-subtle);">
+                    <button class="btn btn-secondary close-btn btn-xs">Cancel</button>
+                    <button class="btn btn-primary confirm-btn btn-xs" style="background: var(--danger); color: white; border: none;">Delete</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        const closeModal = () => modal.remove();
+
+        const confirmAction = () => {
+            closeModal();
+            try {
+                if (typeof AppState.deletePage === 'function') {
+                    AppState.deletePage(index);
+                } else {
+                    console.error('AppState.deletePage is missing');
+                    if (typeof showToast === 'function') showToast('Error: AppState.deletePage not found', 'error');
+                }
+            } catch (e) {
+                console.error('[Sidebar] Error deleting page:', e);
+                if (typeof showToast === 'function') showToast('Error deleting page: ' + e.message, 'error');
+            }
+        };
+
+        modal.querySelectorAll('.close-btn').forEach(btn => btn.onclick = closeModal);
+        modal.querySelector('.confirm-btn').onclick = confirmAction;
+        modal.onclick = (e) => { if (e.target === modal) closeModal(); };
     }
 
     handleClearPage() {

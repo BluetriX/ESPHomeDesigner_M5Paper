@@ -114,6 +114,24 @@ export class ProjectStore {
         emit(EVENTS.PAGE_CHANGED, { index: this.state.currentPageIndex });
     }
 
+    /**
+     * @param {number} index 
+     */
+    deletePage(index) {
+        if (index < 0 || index >= this.state.pages.length) return;
+
+        this.state.pages.splice(index, 1);
+
+        // Adjust current index if needed
+        if (this.state.currentPageIndex >= this.state.pages.length) {
+            this.state.currentPageIndex = Math.max(0, this.state.pages.length - 1);
+        }
+
+        this.rebuildWidgetsIndex();
+        emit(EVENTS.STATE_CHANGED);
+        emit(EVENTS.PAGE_CHANGED, { index: this.state.currentPageIndex });
+    }
+
     /** 
      * @param {import("../../types.js").WidgetConfig} widget 
      * @param {number|null} targetPageIndex
