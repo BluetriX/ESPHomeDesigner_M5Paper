@@ -74,19 +74,26 @@ export function render(canvasInstance) {
         artboardWrapper.appendChild(header);
 
         // 2. Render Artboard Content
+        const shape = AppState.getCanvasShape();
+        const isRound = shape === "round" || shape === "circle";
+
         const artboard = document.createElement("div");
         artboard.className = "artboard";
         artboard.dataset.index = index;
-        artboard.style.width = `${dims.width}px`;
-        artboard.style.height = `${dims.height}px`;
+
+        // Use shorter dimension for both width and height if it's a round display to ensure a perfect circle
+        const displayWidth = isRound ? Math.min(dims.width, dims.height) : dims.width;
+        const displayHeight = isRound ? Math.min(dims.width, dims.height) : dims.height;
+
+        artboard.style.width = `${displayWidth}px`;
+        artboard.style.height = `${displayHeight}px`;
 
         // Apply page-specific theme
         const isDark = getPageEffectiveDarkMode(page);
-        if (isDark) {
-            artboard.classList.add("dark");
-        } else {
-            artboard.classList.remove("dark");
-        }
+        artboard.classList.toggle("dark", isDark);
+
+        // Apply display shape
+        artboard.classList.toggle("round-display", isRound);
 
         // Apply grid if enabled
         if (AppState.showGrid) {

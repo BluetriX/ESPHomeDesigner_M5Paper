@@ -203,19 +203,7 @@ export class PropertiesPanel {
         header.innerHTML = `<span>${title}</span><span class="icon mdi mdi-chevron-down"></span>`;
         header.onclick = (e) => {
             e.stopPropagation();
-            const wasCollapsed = section.classList.contains("collapsed");
-
-            // Accordion behavior: collapse all sibling sections first
-            const parent = section.parentElement;
-            if (parent) {
-                const siblings = parent.querySelectorAll(":scope > .properties-section");
-                siblings.forEach(sib => sib.classList.add("collapsed"));
-            }
-
-            // Expand this section if it was collapsed
-            if (wasCollapsed) {
-                section.classList.remove("collapsed");
-            }
+            section.classList.toggle("collapsed");
         };
 
         const content = document.createElement("div");
@@ -667,6 +655,8 @@ export class PropertiesPanel {
                     this.autoPopulateTitleFromEntity(widget.id, v);
                 }
             }, widget);
+            this.addCheckbox("Local / On-Device Sensor", !!props.is_local_sensor, (v) => updateProp("is_local_sensor", v));
+            this.addHint("Use internal battery_level/signal sensor.");
             this.addLabeledInput("Title/Label", "text", widget.title || "", (v) => {
                 AppState.updateWidget(widget.id, { title: v });
             });
@@ -917,6 +907,8 @@ export class PropertiesPanel {
             if (props.show_background !== false) {
                 this.addColorSelector("Background Color", props.background_color || "black", colors, (v) => updateProp("background_color", v));
                 this.addLabeledInput("Border Radius", "number", props.border_radius || 8, (v) => updateProp("border_radius", parseInt(v, 10)));
+                this.addLabeledInput("Border Thickness", "number", props.border_thickness || 0, (v) => updateProp("border_thickness", parseInt(v, 10)));
+                this.addColorSelector("Border Color", props.border_color || "white", colors, (v) => updateProp("border_color", v));
             }
             this.endSection();
 
@@ -938,6 +930,8 @@ export class PropertiesPanel {
             if (props.show_background !== false) {
                 this.addColorSelector("Background Color", props.background_color || "black", colors, (v) => updateProp("background_color", v));
                 this.addLabeledInput("Border Radius", "number", props.border_radius || 8, (v) => updateProp("border_radius", parseInt(v, 10)));
+                this.addLabeledInput("Border Thickness", "number", props.border_thickness || 0, (v) => updateProp("border_thickness", parseInt(v, 10)));
+                this.addColorSelector("Border Color", props.border_color || "white", colors, (v) => updateProp("border_color", v));
             }
             this.endSection();
 

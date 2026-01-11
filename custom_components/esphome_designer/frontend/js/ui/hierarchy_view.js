@@ -172,6 +172,7 @@ export class HierarchyView {
         div.addEventListener('dragstart', (e) => {
             this.draggedIndex = actualIndex;
             div.classList.add('dragging');
+            e.dataTransfer.setData("application/widget-id", widget.id);
             e.dataTransfer.effectAllowed = 'move';
         });
 

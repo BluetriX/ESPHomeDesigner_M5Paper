@@ -7,6 +7,7 @@ const render = (el, widget, { getColorStyle }) => {
     const color = props.color || "black";
     const iconSize = props.icon_size || 20;
     const fontSize = props.font_size || 14;
+    const borderWidth = props.border_thickness || 0;
 
     el.style.display = "flex";
     el.style.alignItems = "center";
@@ -21,6 +22,12 @@ const render = (el, widget, { getColorStyle }) => {
         el.style.backgroundColor = cssBgColor;
         el.style.borderRadius = (props.border_radius || 8) + "px";
 
+        if (borderWidth > 0) {
+            el.style.border = `${borderWidth}px solid ${getColorStyle(props.border_color || "white")}`;
+        } else {
+            el.style.border = "none";
+        }
+
         // Smart Preview: If Black on Black (common for inverted e-paper profiles), 
         // invert text color for preview visibility.
         if (cssColor === "#000000" && cssBgColor === "#000000") {
@@ -33,6 +40,7 @@ const render = (el, widget, { getColorStyle }) => {
     } else {
         el.style.backgroundColor = "transparent";
         el.style.borderRadius = "0";
+        el.style.border = "none";
     }
 
     el.style.color = cssColor;
@@ -129,20 +137,45 @@ const exportDoc = (w, context) => {
     const showBg = p.show_background !== false;
     const bgColor = getColorConst(p.background_color || "black");
     const radius = parseInt(p.border_radius || 8, 10);
+    const thickness = parseInt(p.border_thickness || 0, 10);
+    const borderColor = getColorConst(p.border_color || "white");
 
     const iconFontRef = addFont("Material Design Icons", 400, iconSize);
     const textFontRef = addFont("Roboto", 500, fontSize);
 
-    lines.push(`        // widget:template_sensor_bar id:${w.id} type:template_sensor_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} wifi:${showWifi} temp:${showTemp} hum:${showHum} bat:${showBat} bg:${showBg} bg_color:${p.background_color || "black"} radius:${radius} icon_size:${iconSize} font_size:${fontSize} color:${colorProp} ${getCondProps(w)}`);
+    lines.push(`        // widget:template_sensor_bar id:${w.id} type:template_sensor_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} wifi:${showWifi} temp:${showTemp} hum:${showHum} bat:${showBat} bg:${showBg} bg_color:${p.background_color || "black"} radius:${radius} border:${thickness} icon_size:${iconSize} font_size:${fontSize} color:${colorProp} ${getCondProps(w)}`);
 
     const cond = getConditionCheck(w);
     if (cond) lines.push(`        ${cond}`);
 
     lines.push(`        {`);
     if (showBg) {
-        lines.push(`          it.filled_rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${bgColor});`);
+        if (radius > 0) {
+            lines.push(`          auto draw_filled_rrect = [&](int x, int y, int w, int h, int r, auto c) {`);
+            lines.push(`            it.filled_rectangle(x + r, y, w - 2 * r, h, c);`);
+            lines.push(`            it.filled_rectangle(x, y + r, r, h - 2 * r, c);`);
+            lines.push(`            it.filled_rectangle(x + w - r, y + r, r, h - 2 * r, c);`);
+            lines.push(`            it.filled_circle(x + r, y + r, r, c);`);
+            lines.push(`            it.filled_circle(x + w - r - 1, y + r, r, c);`);
+            lines.push(`            it.filled_circle(x + r, y + h - r - 1, r, c);`);
+            lines.push(`            it.filled_circle(x + w - r - 1, y + h - r - 1, r, c);`);
+            lines.push(`          };`);
+
+            if (thickness > 0) {
+                lines.push(`          draw_filled_rrect(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${radius}, ${borderColor});`);
+                lines.push(`          draw_filled_rrect(${w.x + thickness}, ${w.y + thickness}, ${w.width - 2 * thickness}, ${w.height - 2 * thickness}, ${Math.max(0, radius - thickness)}, ${bgColor});`);
+            } else {
+                lines.push(`          draw_filled_rrect(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${radius}, ${bgColor});`);
+            }
+        } else {
+            if (thickness > 0) {
+                lines.push(`          it.filled_rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${borderColor});`);
+                lines.push(`          it.filled_rectangle(${w.x + thickness}, ${w.y + thickness}, ${w.width - 2 * thickness}, ${w.height - 2 * thickness}, ${bgColor});`);
+            } else {
+                lines.push(`          it.filled_rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${bgColor});`);
+            }
+        }
         addDitherMask(lines, p.background_color || "black", isEpaper, w.x, w.y, w.width, w.height);
-        lines.push(`          it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${bgColor});`);
     }
 
     let activeCount = 0;
@@ -166,9 +199,9 @@ const exportDoc = (w, context) => {
             lines.push(`              else if (sig >= -85) wifi_icon = "\\U000F0922";`);
             lines.push(`              else wifi_icon = "\\U000F091F";`);
             lines.push(`            }`);
-            lines.push(`            it.printf(${Math.round(currentX)} - 12, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_LEFT, "%s", wifi_icon);`);
-            lines.push(`            if (id(wifi_signal_dbm).has_state()) it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0fdB", id(wifi_signal_dbm).state);`);
-            lines.push(`            else it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--dB");`);
+            lines.push(`            it.printf(${Math.round(currentX)} - 4, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_RIGHT, "%s", wifi_icon);`);
+            lines.push(`            if (id(wifi_signal_dbm).has_state()) it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0fdB", id(wifi_signal_dbm).state);`);
+            lines.push(`            else it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--dB");`);
             lines.push(`          }`);
             currentX += spacing;
         }
@@ -177,15 +210,15 @@ const exportDoc = (w, context) => {
             const tempId = profile.features?.sht4x ? "sht4x_temperature" : (profile.features?.sht3x ? "sht3x_temperature" : "shtc3_temperature");
             const unit = p.unit || "°C";
             lines.push(`          {`);
-            lines.push(`            it.printf(${Math.round(currentX)} - 12, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_LEFT, "\\U000F050F");`);
+            lines.push(`            it.printf(${Math.round(currentX)} - 4, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_RIGHT, "\\U000F050F");`);
             lines.push(`            if (id(${tempId}).has_state() && !std::isnan(id(${tempId}).state)) {`);
             if (unit === "°F" || unit === "F") {
-                lines.push(`              it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.1f°F", id(${tempId}).state * 9.0 / 5.0 + 32.0);`);
+                lines.push(`              it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.1f°F", id(${tempId}).state * 9.0 / 5.0 + 32.0);`);
             } else {
-                lines.push(`              it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.1f°C", id(${tempId}).state);`);
+                lines.push(`              it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.1f°C", id(${tempId}).state);`);
             }
             lines.push(`            } else {`);
-            lines.push(`              it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--${unit}");`);
+            lines.push(`              it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--${unit}");`);
             lines.push(`            }`);
             lines.push(`          }`);
             currentX += spacing;
@@ -194,9 +227,9 @@ const exportDoc = (w, context) => {
         if (showHum) {
             const humId = profile.features?.sht4x ? "sht4x_humidity" : (profile.features?.sht3x ? "sht3x_humidity" : "shtc3_humidity");
             lines.push(`          {`);
-            lines.push(`            it.printf(${Math.round(currentX)} - 12, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_LEFT, "\\U000F058E");`);
-            lines.push(`            if (id(${humId}).has_state()) it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0f%%", id(${humId}).state);`);
-            lines.push(`            else it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--%%");`);
+            lines.push(`            it.printf(${Math.round(currentX)} - 4, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_RIGHT, "\\U000F058E");`);
+            lines.push(`            if (id(${humId}).has_state()) it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0f%%", id(${humId}).state);`);
+            lines.push(`            else it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--%%");`);
             lines.push(`          }`);
             currentX += spacing;
         }
@@ -209,9 +242,9 @@ const exportDoc = (w, context) => {
             lines.push(`            else if (lvl >= 50) bat_icon = "\\U000F007E";`);
             lines.push(`            else if (lvl >= 20) bat_icon = "\\U000F007B";`);
             lines.push(`            else bat_icon = "\\U000F0083";`);
-            lines.push(`            it.printf(${Math.round(currentX)} - 12, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_LEFT, "%s", bat_icon);`);
-            lines.push(`            if (id(battery_level).has_state()) it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0f%%", id(battery_level).state);`);
-            lines.push(`            else it.printf(${Math.round(currentX)} + 8, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--%%");`);
+            lines.push(`            it.printf(${Math.round(currentX)} - 4, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_RIGHT, "%s", bat_icon);`);
+            lines.push(`            if (id(battery_level).has_state()) it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0f%%", id(battery_level).state);`);
+            lines.push(`            else it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--%%");`);
             lines.push(`          }`);
         }
     }

@@ -79,11 +79,14 @@ export class ProjectStore {
         emit(EVENTS.STATE_CHANGED);
     }
 
-    /** @param {number} index */
-    setCurrentPageIndex(index) {
+    /** 
+     * @param {number} index 
+     * @param {Object} options 
+     */
+    setCurrentPageIndex(index, options = {}) {
         if (index >= 0 && index < this.state.pages.length) {
             this.state.currentPageIndex = index;
-            emit(EVENTS.PAGE_CHANGED, { index });
+            emit(EVENTS.PAGE_CHANGED, { index, ...options });
         }
     }
 
@@ -151,6 +154,45 @@ export class ProjectStore {
         if (changed) {
             emit(EVENTS.STATE_CHANGED);
         }
+    }
+
+    /**
+     * Moves a widget from its current page to a target page.
+     * @param {string} widgetId 
+     * @param {number} targetPageIndex 
+     * @param {number|null} x Optional target X coordinate
+     * @param {number|null} y Optional target Y coordinate
+     */
+    moveWidgetToPage(widgetId, targetPageIndex, x = null, y = null) {
+        if (targetPageIndex < 0 || targetPageIndex >= this.state.pages.length) return false;
+
+        // Find current page
+        let sourcePage = null;
+        let sourceWidgetIndex = -1;
+
+        for (const page of this.state.pages) {
+            sourceWidgetIndex = page.widgets.findIndex(w => w.id === widgetId);
+            if (sourceWidgetIndex !== -1) {
+                sourcePage = page;
+                break;
+            }
+        }
+
+        if (!sourcePage) return false;
+
+        const targetPage = this.state.pages[targetPageIndex];
+        if (sourcePage === targetPage) return false;
+
+        // Move widget
+        const [widget] = sourcePage.widgets.splice(sourceWidgetIndex, 1);
+
+        if (x !== null) widget.x = x;
+        if (y !== null) widget.y = y;
+
+        targetPage.widgets.push(widget);
+
+        emit(EVENTS.STATE_CHANGED);
+        return true;
     }
 
     /**
@@ -255,10 +297,20 @@ export class ProjectStore {
             pages: this.state.pages,
             deviceName: this.state.deviceName,
             deviceModel: this.state.deviceModel,
-            deviceSettings: {
-                model: this.state.deviceModel,
-                custom_hardware: this.state.customHardware
-            }
+            currentLayoutId: this.state.currentLayoutId,
+            customHardware: this.state.customHardware
         };
+    }
+
+    /** @returns {string} */
+    getCanvasShape() {
+        const profile = DEVICE_PROFILES[this.state.deviceModel];
+        if (profile && profile.shape) return profile.shape;
+
+        if (this.state.customHardware && this.state.customHardware.shape) {
+            return this.state.customHardware.shape;
+        }
+
+        return "rect";
     }
 }

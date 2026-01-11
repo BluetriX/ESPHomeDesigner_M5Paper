@@ -25,7 +25,7 @@ export function generateLVGLSnippet(pages, deviceModel) {
     lines.push("lvgl:");
     lines.push("  id: my_lvgl");
     lines.push("  log_level: WARN");
-    lines.push("  bg_color: 0xFFFFFF");
+    lines.push('  bg_color: "0xFFFFFF"');
     lines.push("  displays:");
 
     // Dynamic display ID based on device type
@@ -36,8 +36,6 @@ export function generateLVGLSnippet(pages, deviceModel) {
     if (profile.touch) {
         lines.push("  touchscreens:");
         lines.push("    - my_touchscreen");
-    } else {
-        lines.push("  touchscreens: []");
     }
     lines.push("");
 
@@ -217,11 +215,11 @@ function transpileToLVGL(w, profile) {
 
     // Helpers
     function convertColor(hex) {
-        if (!hex || hex === "transparent") return "0x000000";
+        if (!hex || hex === "transparent") return '"0x000000"';
         if (hex.startsWith("#")) {
-            return "0x" + hex.substring(1).toUpperCase();
+            return '"0x' + hex.substring(1).toUpperCase() + '"';
         }
-        return hex;
+        return `"${hex}"`;
     }
 
     function convertAlign(align) {

@@ -15,6 +15,8 @@ export class Sidebar {
         if (!this.widgetPaletteEl) Logger.error("Sidebar: widgetPalette element not found!");
         this.addPageBtn = document.getElementById("addPageBtn");
         this.currentPageNameEl = document.getElementById("currentPageName");
+        this.hoverTimeout = null;
+        this.hoveredPageIndex = -1;
     }
 
     init() {
@@ -101,7 +103,20 @@ export class Sidebar {
 
             item.ondragover = (e) => {
                 e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
+                const isWidgetId = e.dataTransfer.types.includes("application/widget-id");
+                const isWidgetType = e.dataTransfer.types.includes("application/widget-type");
+
+                if (isWidgetId || isWidgetType) {
+                    e.dataTransfer.dropEffect = isWidgetId ? "move" : "copy";
+                    item.style.backgroundColor = "var(--primary-subtle)";
+
+                    // Switch page immediately (like clicking) when dragging a widget over it
+                    if (AppState.currentPageIndex !== index) {
+                        AppState.setCurrentPageIndex(index);
+                    }
+                    return;
+                }
+
                 const rect = item.getBoundingClientRect();
                 const midpoint = rect.top + rect.height / 2;
                 if (e.clientY < midpoint) {
@@ -113,15 +128,45 @@ export class Sidebar {
                 }
             };
 
-            item.ondragleave = () => {
+            item.ondragleave = (e) => {
+                // Only clear if we're leaving the hovered page, not just re-entering child elements
+                const relatedTarget = e.relatedTarget;
+                if (!item.contains(relatedTarget)) {
+                    if (this.hoveredPageIndex === index) {
+                        if (this.hoverTimeout) {
+                            clearTimeout(this.hoverTimeout);
+                            this.hoverTimeout = null;
+                        }
+                        this.hoveredPageIndex = -1;
+                    }
+                }
                 item.style.borderTop = "";
                 item.style.borderBottom = "";
+                item.style.backgroundColor = "";
             };
 
             item.ondrop = (e) => {
                 e.preventDefault();
+                if (this.hoverTimeout) {
+                    clearTimeout(this.hoverTimeout);
+                    this.hoverTimeout = null;
+                }
+                this.hoveredPageIndex = -1;
                 item.style.borderTop = "";
                 item.style.borderBottom = "";
+                item.style.backgroundColor = "";
+
+                const widgetId = e.dataTransfer.getData("application/widget-id");
+                Logger.log(`[Sidebar] Drop detected on page ${index}. Widget ID:`, widgetId);
+                if (widgetId) {
+                    const targetPageIndex = index;
+                    if (targetPageIndex !== AppState.currentPageIndex) {
+                        AppState.moveWidgetToPage(widgetId, targetPageIndex);
+                        Logger.log(`[Sidebar] Moved widget ${widgetId} to page ${targetPageIndex}`);
+                    }
+                    return;
+                }
+
                 const fromIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
                 const toIndex = index;
                 this.handlePageReorder(fromIndex, toIndex, e.clientY, item);

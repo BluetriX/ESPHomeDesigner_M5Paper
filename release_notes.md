@@ -29,6 +29,9 @@
 - **Core Adapter Fixes**: Fixed lambda indentation, resolved LVGL display conflicts, and improved rotation/touch mapping for Waveshare 7" displays.
 - **Widget Specific Fixes**: Resolved rendering bugs for Progress Bars (sanitization), Shapes (border/fill), and Calendars (event overlapping).
 - **Improved Robustness**: Added global presence checks (`has_state()`) and automated sensor registration in YAML to prevent missing ID errors.
+- **Cross-Page Drag & Drop**: You can now seamlessly drag widgets from one page's canvas to another in the multi-page view.
+- **Smart Sidebar Navigation**: Dragging a widget over a page name in the sidebar automatically switches to that page, allowing for easy cross-page moves.
+- **Drag Stability**: Fixed "drift" and "jump" issues during drag operations, ensuring widgets stay perfectly under the cursor even when zooming or switching pages.
 
 > [!WARNING]
 > **BREAKING CHANGES**

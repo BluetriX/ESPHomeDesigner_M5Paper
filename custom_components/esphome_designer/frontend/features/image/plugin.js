@@ -68,7 +68,7 @@ const render = (el, widget, { getColorStyle }) => {
                 imgSrc = path;
             }
         } else {
-            imgSrc = "/api/esphome_designer/image_proxy?path=" + encodeURIComponent(path);
+            imgSrc = "/api/esphome_designer/image_proxy?filename=" + encodeURIComponent(path);
         }
 
         if (imgSrc) {
@@ -131,6 +131,50 @@ const render = (el, widget, { getColorStyle }) => {
     }
 };
 
+const exportDoc = (w, context) => {
+    const { lines, getCondProps, getConditionCheck } = context;
+    const props = w.props || {};
+    const path = (props.path || "").replace(/^"|"$/g, '').trim();
+    const invert = !!props.invert;
+
+    if (!path) return;
+
+    const safeId = `img_${w.id.replace(/-/g, "_")}`;
+    lines.push(`        // widget:image id:${w.id} type:image x:${w.x} y:${w.y} w:${w.width} h:${w.height} path:"${path}" invert:${invert} ${getCondProps(w)}`);
+
+    const cond = getConditionCheck(w);
+    if (cond) lines.push(`        ${cond}`);
+
+    if (invert) {
+        lines.push(`        it.image(${w.x}, ${w.y}, id(${safeId}), color_off, color_on);`);
+    } else {
+        lines.push(`        it.image(${w.x}, ${w.y}, id(${safeId}));`);
+    }
+
+    if (cond) lines.push(`        }`);
+};
+
+const onExportComponents = (context) => {
+    const { lines, widgets } = context;
+    const targets = widgets.filter(w => w.type === 'image');
+
+    if (targets.length > 0) {
+        lines.push("image:");
+        targets.forEach(w => {
+            const props = w.props || {};
+            const path = (props.path || "").replace(/^"|"$/g, '').trim();
+            if (!path) return;
+
+            const safeId = `img_${w.id.replace(/-/g, "_")}`;
+            lines.push(`  - file: "${path}"`);
+            lines.push(`    id: ${safeId}`);
+            lines.push(`    type: TRANSPARENT_BINARY`); // Standard for e-ink
+            lines.push(`    dither: FLOYDSTEINBERG`);
+        });
+        lines.push("");
+    }
+};
+
 export default {
     id: "image",
     name: "Image",
@@ -141,5 +185,7 @@ export default {
         invert: false,
         size: "native"
     },
-    render
+    render,
+    export: exportDoc,
+    onExportComponents
 };

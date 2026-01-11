@@ -141,6 +141,12 @@
     transition: box-shadow 0.4s var(--t-base), transform 0.4s var(--t-base);
 }
 
+.artboard.round-display {
+    border-radius: 50%;
+    /* Ensure all widgets and grid are clipped to the circle */
+    overflow: hidden;
+}
+
 .active-page .artboard {
     /* Active artboard glow and slight lift */
     box-shadow:

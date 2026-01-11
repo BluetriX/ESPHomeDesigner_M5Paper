@@ -32,8 +32,10 @@ export class Canvas {
         on(EVENTS.STATE_CHANGED, () => this.render());
         on(EVENTS.PAGE_CHANGED, (e) => {
             this.render();
-            // Focus the new page after render
-            this.focusPage(e.index);
+            // Focus the new page after render, unless suppressed
+            if (!e.suppressFocus) {
+                this.focusPage(e.index);
+            }
         });
         on(EVENTS.SELECTION_CHANGED, () => this.render());
         on(EVENTS.SETTINGS_CHANGED, () => {

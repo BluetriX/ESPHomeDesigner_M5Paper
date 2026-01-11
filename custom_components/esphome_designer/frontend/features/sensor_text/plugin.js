@@ -230,8 +230,16 @@ export default {
         } = context;
 
         const p = w.props || {};
-        const entityId = (w.entity_id || "").trim();
-        const entityId2 = (w.entity_id_2 || "").trim();
+        let entityId = (w.entity_id || "").trim();
+        let entityId2 = (w.entity_id_2 || "").trim();
+
+        // Ensure sensor. prefix if missing and it's not a local sensor
+        if (entityId && !p.is_local_sensor && !entityId.includes(".") && !entityId.startsWith("text_sensor.")) {
+            entityId = `sensor.${entityId}`;
+        }
+        if (entityId2 && !p.is_local_sensor && !entityId2.includes(".") && !entityId2.startsWith("text_sensor.")) {
+            entityId2 = `sensor.${entityId2}`;
+        }
 
         const format = p.value_format || "label_value";
         const unit = p.unit || "";
@@ -250,7 +258,7 @@ export default {
 
         lines.push(`        // widget:sensor_text id:${w.id} type:sensor_text x:${w.x} y:${w.y} w:${w.width} h:${w.height} ent:${entityId} fmt:${format} ${getCondProps(w)}`);
 
-        if (!entityId) {
+        if (!entityId && !p.is_local_sensor) {
             lines.push(`        // Sensor ID missing for this widget`);
             return;
         }
@@ -263,6 +271,7 @@ export default {
 
         // Helper to get ESPHome variable name for an entity
         const getVarName = (eid, isText) => {
+            if (p.is_local_sensor) return `id(${eid || "battery_level"})`;
             const safe = eid.replace(/[^a-zA-Z0-9_]/g, "_");
             if (isText || p.is_text_sensor || eid.startsWith("text_sensor.")) return `id(${safe}_txt)`;
             return `id(${safe})`;
@@ -272,7 +281,7 @@ export default {
         const v2 = entityId2 ? getVarName(entityId2) : null;
 
         // Determine format string for values
-        const isText = p.is_text_sensor || entityId.startsWith("text_sensor.");
+        const isText = p.is_text_sensor || (entityId && entityId.startsWith("text_sensor."));
         const valFmt = isText ? "%s" : `%.${precision}f`;
 
         // Format parts
@@ -397,14 +406,25 @@ export default {
         for (const w of widgets) {
             if (w.type !== "sensor_text") continue;
 
-            const entityId = (w.entity_id || "").trim();
             const p = w.props || {};
-            if (!entityId || p.is_local_sensor || p.is_text_sensor || entityId.startsWith("weather.") || entityId.startsWith("text_sensor.")) continue;
+            if (p.is_local_sensor) continue;
 
-            if (!processed.has(entityId)) {
-                processed.add(entityId);
-                const safeId = entityId.replace(/[^a-zA-Z0-9_]/g, "_");
-                lines.push("- platform: homeassistant", `  id: ${safeId}`, `  entity_id: ${entityId}`, "  internal: true");
+            const entities = [w.entity_id, w.entity_id_2].filter(id => id && id.trim());
+
+            for (let eid of entities) {
+                eid = eid.trim();
+                if (p.is_text_sensor || eid.startsWith("weather.") || eid.startsWith("text_sensor.")) continue;
+
+                // Ensure sensor. prefix if missing
+                if (!eid.includes(".")) {
+                    eid = `sensor.${eid}`;
+                }
+
+                if (!processed.has(eid)) {
+                    processed.add(eid);
+                    const safeId = eid.replace(/[^a-zA-Z0-9_]/g, "_");
+                    lines.push("- platform: homeassistant", `  id: ${safeId}`, `  entity_id: ${eid}`, "  internal: true");
+                }
             }
         }
     }

@@ -232,11 +232,21 @@ export class ESPHomeAdapter extends BaseAdapter {
                 });
 
                 allWidgets.forEach(w => {
-                    const entityId = (w.entity_id || "").trim();
+                    let entityId = (w.entity_id || "").trim();
                     const p = w.props || {};
+
+                    if (!entityId || p.is_local_sensor) return;
+
+                    // Numeric sensor types that should be prefixed with sensor. if domain is missing
+                    const numericSensorTypes = ["progress_bar", "sensor_text", "graph", "battery_icon", "wifi_signal", "ondevice_temperature", "ondevice_humidity"];
+
+                    if (numericSensorTypes.includes(w.type) && !entityId.includes(".")) {
+                        entityId = `sensor.${entityId}`;
+                    }
+
                     const isHaSensor = entityId.includes(".") && !entityId.startsWith("weather.") && !entityId.startsWith("text_sensor.") && !entityId.startsWith("binary_sensor.");
 
-                    if (isHaSensor && !p.is_local_sensor && !seenEntities.has(entityId)) {
+                    if (isHaSensor && !seenEntities.has(entityId)) {
                         seenEntities.add(entityId);
                         const safeId = entityId.replace(/[^a-zA-Z0-9_]/g, "_");
                         numericSensorLines.push("- platform: homeassistant");
@@ -271,6 +281,33 @@ export class ESPHomeAdapter extends BaseAdapter {
                 }
             }
             PluginRegistry.onExportBinarySensors({ ...context, lines: binarySensorLines });
+
+            // Safety Fix: Auto-register any HA binary sensors used in conditions
+            const allWidgetsForBinary = pages.flatMap(p => p.widgets || []);
+            const seenBinaryEntities = new Set();
+            const binaryDomains = ["binary_sensor.", "switch.", "light.", "input_boolean.", "fan.", "cover.", "vacuum.", "lock."];
+
+            // Track entities already registered by plugins
+            binarySensorLines.forEach(l => {
+                if (l.includes("entity_id:")) {
+                    const m = l.match(/entity_id:\s*(.+)/);
+                    if (m) seenBinaryEntities.add(m[1].trim());
+                }
+            });
+
+            allWidgetsForBinary.forEach(w => {
+                const ent = (w.condition_entity || "").trim();
+                const isBinaryHa = binaryDomains.some(d => ent.startsWith(d));
+
+                if (isBinaryHa && !seenBinaryEntities.has(ent)) {
+                    seenBinaryEntities.add(ent);
+                    const safeId = ent.replace(/[^a-zA-Z0-9_]/g, "_");
+                    binarySensorLines.push("- platform: homeassistant");
+                    binarySensorLines.push(`  id: ${safeId}`);
+                    binarySensorLines.push(`  entity_id: ${ent}`);
+                    binarySensorLines.push(`  internal: true`);
+                }
+            });
 
             if (binarySensorLines.length > 0) {
                 lines.push("binary_sensor:");
@@ -328,8 +365,8 @@ export class ESPHomeAdapter extends BaseAdapter {
         // 7. Display Hardware & Lambda
         const hasLvgl = isLvgl && generateLVGLSnippet;
         if (!profile.isPackageBased) {
-            // Fix #129: Skip generic display if LVGL is handling it
-            const hardwareLines = (Generators.generateDisplaySection && !hasLvgl)
+            // Fix #129: Keep display hardware but skip lambda if LVGL is handling rendering
+            const hardwareLines = Generators.generateDisplaySection
                 ? Generators.generateDisplaySection(profile, layout.orientation)
                 : [];
             lines.push(...hardwareLines);
@@ -338,27 +375,33 @@ export class ESPHomeAdapter extends BaseAdapter {
                 if (lines[i].trim() === "display:") {
                     let j = i + 1;
                     while (j < lines.length && (lines[j].startsWith("  ") || lines[j].trim() === "")) j++;
-                    // Fix #122: Use consistent indentation for lambda header
-                    lines.splice(j, 0, "    lambda: |-", ...lambdaContent.map(l => "      " + l));
+                    if (!hasLvgl) {
+                        // Fix #122: Use consistent indentation for lambda header
+                        lines.splice(j, 0, "    lambda: |-", ...lambdaContent.map(l => "      " + l));
+                    }
                     break;
                 }
             }
         } else if (packageContent) {
             // Fix #122: Robust placeholder replacement with indentation preservation
             // Ensure first line doesn't get double indent by matching entire line
-            const lambdaString = lambdaContent.map(l => "      " + l).join("\n");
-            const placeholder = "# __LAMBDA_PLACEHOLDER__";
+            // Capture indentation and replace the entire line
+            const placeholderRegex = /^(\s*)# __LAMBDA_PLACEHOLDER__/m;
+            const match = packageContent.match(placeholderRegex);
 
-            // Check if recipe already contains the lambda header immediately before placeholder
-            const hasHeader = new RegExp(`lambda:\\s*\\|-\\s*[\\r\\n]+\\s*${placeholder.replace("#", "\\#")}`).test(packageContent);
+            if (match) {
+                const indent = match[1];
+                const placeholder = "# __LAMBDA_PLACEHOLDER__";
+                // Check if recipe already contains the lambda header immediately before placeholder
+                const hasHeader = new RegExp(`lambda:\\s*\\|-\\s*[\\r\\n]+\\s*${placeholder.replace("#", "\\#")}`).test(packageContent);
 
-            // Replace the entire line containing the placeholder (including its indentation)
-            // This prevents the first line from inheriting the placeholder's indentation
-            const placeholderRegex = new RegExp(`^\\s*${placeholder.replace("#", "\\#")}`, 'm');
-
-            if (packageContent.match(placeholderRegex)) {
-                const replacement = (hasHeader ? "" : "lambda: |-\n") + lambdaString;
-                packageContent = packageContent.replace(placeholderRegex, replacement);
+                // Fix #129: Skip lambda injection if LVGL is handling the display
+                if (hasLvgl) {
+                    packageContent = packageContent.replace(placeholderRegex, "");
+                } else {
+                    const replacement = (hasHeader ? "" : "lambda: |-\n") + lambdaContent.map(l => indent + "      " + l).join("\n");
+                    packageContent = packageContent.replace(placeholderRegex, replacement);
+                }
             }
 
             packageContent = this.applyPackageOverrides(packageContent, profile, layout.orientation);
@@ -599,15 +642,19 @@ export class ESPHomeAdapter extends BaseAdapter {
 
             yaml = yaml.replace(/rotation:\s*\d+/g, `rotation: ${rotation}`);
 
-            // Simple GT911 transform logic
-            let transform = "";
-            if (rotation === 0) transform = "swap_xy: true\n      mirror_x: false\n      mirror_y: true";
-            else if (rotation === 90) transform = "swap_xy: false\n      mirror_x: false\n      mirror_y: false";
-            else if (rotation === 180) transform = "swap_xy: true\n      mirror_x: true\n      mirror_y: false";
-            else if (rotation === 270) transform = "swap_xy: false\n      mirror_x: true\n      mirror_y: true";
+            // Fix #129: Indentation-aware GT911 transform logic
+            const idMatch = yaml.match(/^(\s*)id:\s*my_touchscreen/m);
+            if (idMatch) {
+                const indent = idMatch[1];
+                let transform = "";
+                if (rotation === 0) transform = `transform:\n${indent}  swap_xy: true\n${indent}  mirror_x: false\n${indent}  mirror_y: true`;
+                else if (rotation === 90) transform = `transform:\n${indent}  swap_xy: false\n${indent}  mirror_x: false\n${indent}  mirror_y: false`;
+                else if (rotation === 180) transform = `transform:\n${indent}  swap_xy: true\n${indent}  mirror_x: true\n${indent}  mirror_y: false`;
+                else if (rotation === 270) transform = `transform:\n${indent}  swap_xy: false\n${indent}  mirror_x: true\n${indent}  mirror_y: true`;
 
-            if (transform) {
-                yaml = yaml.replace(/(id:\s*my_touchscreen\s*\n)/, `$1    transform:\n      ${transform}\n`);
+                if (transform) {
+                    yaml = yaml.replace(/(id:\s*my_touchscreen[^\n\r]*[\r\n]+)/, `$1${indent}${transform}\n`);
+                }
             }
         }
         return yaml;
@@ -634,8 +681,9 @@ export class ESPHomeAdapter extends BaseAdapter {
 
         const safeId = ent.replace(/[^a-zA-Z0-9_]/g, "_");
 
+        const binaryDomains = ["binary_sensor.", "switch.", "light.", "input_boolean.", "fan.", "cover.", "vacuum.", "lock."];
+        const isBinary = binaryDomains.some(d => ent.startsWith(d));
         const isTextExplicit = ent.startsWith("text_sensor.");
-        const isBinary = ent.startsWith("binary_sensor.");
         let isText = isTextExplicit;
 
         if (!isText && !isBinary && op !== "range") {
@@ -646,15 +694,19 @@ export class ESPHomeAdapter extends BaseAdapter {
             }
         }
 
+        // Standardized naming convention - plugins should follow this too
         let valExpr = `id(${safeId}).state`;
-        if (isText) valExpr = `id(${safeId}_txt).state`;
-        else if (isBinary) valExpr = `id(${safeId}_bin).state`;
+        if (isText && !ent.startsWith("text_sensor.")) {
+            // Only use _txt if it was auto-detected as text and isn't already prefixed
+            // But for consistency with sensor_text plugin, we might need it.
+            // Actually, let's keep it simple: id(safeId).state is usually enough if registered correctly.
+        }
 
         let cond = "";
         if (op === "==" || op === "!=" || op === ">" || op === "<" || op === ">=" || op === "<=") {
             if (isText) {
                 cond = `${valExpr} ${op} "${state}"`;
-            } else if (ent.startsWith("binary_sensor.")) {
+            } else if (isBinary) {
                 const positiveStates = ["on", "true", "1", "open", "locked", "home", "occupied", "active", "detected"];
                 const isPositive = positiveStates.includes(stateLower);
                 if (op === "==") cond = isPositive ? valExpr : `!${valExpr}`;

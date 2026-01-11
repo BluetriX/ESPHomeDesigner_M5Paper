@@ -53,7 +53,7 @@ class AppStateFacade {
     }
 
     getCanvasShape() {
-        return "rect"; // Fallback or implement profile lookup
+        return this.project.getCanvasShape();
     }
 
     getPagesPayload() {
@@ -95,8 +95,8 @@ class AppStateFacade {
         emit(EVENTS.STATE_CHANGED);
     }
 
-    setCurrentPageIndex(index) {
-        this.project.setCurrentPageIndex(index);
+    setCurrentPageIndex(index, options = {}) {
+        this.project.setCurrentPageIndex(index, options);
         this.editor.setSelectedWidgetIds([]);
         emit(EVENTS.STATE_CHANGED);
     }
@@ -169,6 +169,15 @@ class AppStateFacade {
         this.editor.setSelectedWidgetIds([]);
         this.recordHistory();
         emit(EVENTS.STATE_CHANGED);
+    }
+
+    moveWidgetToPage(widgetId, targetPageIndex, x = null, y = null) {
+        const success = this.project.moveWidgetToPage(widgetId, targetPageIndex, x, y);
+        if (success) {
+            this.recordHistory();
+            emit(EVENTS.STATE_CHANGED);
+        }
+        return success;
     }
 
     clearCurrentPage(preserveLocked = false) {

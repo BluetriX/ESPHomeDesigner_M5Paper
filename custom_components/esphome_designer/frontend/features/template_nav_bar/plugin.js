@@ -6,6 +6,7 @@ const render = (el, widget, { getColorStyle }) => {
     const props = widget.props || {};
     const color = props.color || "black";
     const iconSize = props.icon_size || 24;
+    const borderWidth = props.border_thickness || 0;
 
     el.style.display = "flex";
     el.style.alignItems = "center";
@@ -20,14 +21,25 @@ const render = (el, widget, { getColorStyle }) => {
         el.style.backgroundColor = cssBgColor;
         el.style.borderRadius = (props.border_radius || 8) + "px";
 
+        if (borderWidth > 0) {
+            el.style.border = `${borderWidth}px solid ${getColorStyle(props.border_color || "white")}`;
+        } else {
+            el.style.border = "none";
+        }
+
         // Smart Preview: If Black on Black (common for inverted e-paper profiles), 
         // invert text color for preview visibility.
         if (cssColor === "#000000" && cssBgColor === "#000000") {
             cssColor = "#ffffff";
         }
+
+        if (!props.background_color || props.background_color === "transparent") {
+            el.style.border = "1px dashed #444"; // Visual aid for transparent
+        }
     } else {
         el.style.backgroundColor = "transparent";
         el.style.borderRadius = "0";
+        el.style.border = "none";
     }
 
     el.style.color = cssColor;
@@ -78,21 +90,46 @@ const exportDoc = (w, context) => {
     const showHome = p.show_home !== false;
     const showNext = p.show_next !== false;
     const showBg = p.show_background !== false;
-    const radius = parseInt(p.border_radius || 8, 10);
     const bgColor = getColorConst(p.background_color || "black");
+    const radius = parseInt(p.border_radius || 8, 10);
+    const thickness = parseInt(p.border_thickness || 0, 10);
+    const borderColor = getColorConst(p.border_color || "white");
 
     const iconFontRef = addFont("Material Design Icons", 400, iconSize);
 
-    lines.push(`        // widget:template_nav_bar id:${w.id} type:template_nav_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} prev:${showPrev} home:${showHome} next:${showNext} bg:${showBg} bg_color:${p.background_color || "black"} radius:${radius} icon_size:${iconSize} color:${colorProp} ${getCondProps(w)}`);
+    lines.push(`        // widget:template_nav_bar id:${w.id} type:template_nav_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} prev:${showPrev} home:${showHome} next:${showNext} bg:${showBg} bg_color:${p.background_color || "black"} radius:${radius} border:${thickness} icon_size:${iconSize} color:${colorProp} ${getCondProps(w)}`);
 
     const cond = getConditionCheck(w);
     if (cond) lines.push(`        ${cond}`);
 
     lines.push(`        {`);
     if (showBg) {
-        lines.push(`          it.filled_rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${bgColor});`);
+        if (radius > 0) {
+            lines.push(`          auto draw_filled_rrect = [&](int x, int y, int w, int h, int r, auto c) {`);
+            lines.push(`            it.filled_rectangle(x + r, y, w - 2 * r, h, c);`);
+            lines.push(`            it.filled_rectangle(x, y + r, r, h - 2 * r, c);`);
+            lines.push(`            it.filled_rectangle(x + w - r, y + r, r, h - 2 * r, c);`);
+            lines.push(`            it.filled_circle(x + r, y + r, r, c);`);
+            lines.push(`            it.filled_circle(x + w - r - 1, y + r, r, c);`);
+            lines.push(`            it.filled_circle(x + r, y + h - r - 1, r, c);`);
+            lines.push(`            it.filled_circle(x + w - r - 1, y + h - r - 1, r, c);`);
+            lines.push(`          };`);
+
+            if (thickness > 0) {
+                lines.push(`          draw_filled_rrect(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${radius}, ${borderColor});`);
+                lines.push(`          draw_filled_rrect(${w.x + thickness}, ${w.y + thickness}, ${w.width - 2 * thickness}, ${w.height - 2 * thickness}, ${Math.max(0, radius - thickness)}, ${bgColor});`);
+            } else {
+                lines.push(`          draw_filled_rrect(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${radius}, ${bgColor});`);
+            }
+        } else {
+            if (thickness > 0) {
+                lines.push(`          it.filled_rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${borderColor});`);
+                lines.push(`          it.filled_rectangle(${w.x + thickness}, ${w.y + thickness}, ${w.width - 2 * thickness}, ${w.height - 2 * thickness}, ${bgColor});`);
+            } else {
+                lines.push(`          it.filled_rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${bgColor});`);
+            }
+        }
         addDitherMask(lines, p.background_color || "black", isEpaper, w.x, w.y, w.width, w.height);
-        lines.push(`          it.rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${bgColor});`);
     }
 
     let activeCount = 0;

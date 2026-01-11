@@ -103,7 +103,7 @@ const exportDoc = (w, context) => {
     } = context;
 
     const p = w.props || {};
-    const entityId = (w.entity_id || "").trim();
+    let entityId = (w.entity_id || "").trim();
     const title = sanitize(w.title || "");
     const showLabel = p.show_label !== false;
     const showPercentage = p.show_percentage !== false;
@@ -113,14 +113,20 @@ const exportDoc = (w, context) => {
 
     const fontId = addFont("Roboto", 400, 12);
 
+    // Ensure sensor. prefix if missing and it's not a local sensor
+    if (entityId && !p.is_local_sensor && !entityId.includes(".")) {
+        entityId = `sensor.${entityId}`;
+    }
+
     lines.push(`        // widget:progress_bar id:${w.id} type:progress_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} title:"${title}" show_label:${showLabel} show_pct:${showPercentage} bar_height:${barHeight} color:${colorProp} local:${!!p.is_local_sensor} ${getCondProps(w)}`);
 
     const cond = getConditionCheck(w);
     if (cond) lines.push(`        ${cond}`);
 
-    if (entityId) {
-        const safeId = entityId.replace(/[^a-zA-Z0-9_]/g, "_");
-        lines.push(`        float val_${w.id.replace(/-/g, '_')} = id(${safeId}).state;`);
+    const sensorId = p.is_local_sensor ? (entityId || "battery_level") : (entityId ? entityId.replace(/[^a-zA-Z0-9_]/g, "_") : "");
+
+    if (sensorId) {
+        lines.push(`        float val_${w.id.replace(/-/g, '_')} = id(${sensorId}).state;`);
         lines.push(`        if (std::isnan(val_${w.id.replace(/-/g, '_')})) val_${w.id.replace(/-/g, '_')} = 0;`);
         lines.push(`        int pct_${w.id.replace(/-/g, '_')} = (int)val_${w.id.replace(/-/g, '_')};`);
         lines.push(`        if (pct_${w.id.replace(/-/g, '_')} < 0) pct_${w.id.replace(/-/g, '_')} = 0;`);
@@ -160,9 +166,14 @@ const onExportNumericSensors = (context) => {
     for (const w of widgets) {
         if (w.type !== "progress_bar") continue;
 
-        const entityId = (w.entity_id || "").trim();
+        let entityId = (w.entity_id || "").trim();
         const p = w.props || {};
         if (!entityId || p.is_local_sensor) continue;
+
+        // Ensure sensor. prefix if missing
+        if (!entityId.includes(".")) {
+            entityId = `sensor.${entityId}`;
+        }
 
         if (!processed.has(entityId)) {
             processed.add(entityId);
