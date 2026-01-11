@@ -77,6 +77,10 @@
     --radius-lg: 12px;
     --radius-xl: 20px;
 
+    /* --- Properties Panel --- */
+    --prop-header-bg: #23272e;
+    --prop-input-bg: #0a0c10;
+
     /* Legacy compatibility for components not yet fully migrated */
     --bg: var(--bg-base);
     --bg-elevated: var(--bg-surface);
@@ -107,6 +111,9 @@
     --bg-overlay: rgba(0, 0, 0, 0.4);
     --bg-modal: #ffffff;
     --color-on-accent: #ffffff;
+
+    --prop-header-bg: #e5e7eb;
+    --prop-input-bg: #ffffff;
 
     --glass-bg: hsla(var(--h), 15%, 100%, 0.9);
     --glass-border: hsla(var(--h), 0%, 0%, 0.12);

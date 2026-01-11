@@ -15,9 +15,8 @@ textarea {
     font-size: var(--fs-base);
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
-    background: var(--bg-base);
+    background: var(--prop-input-bg);
     color: var(--text-dim);
-    /* Significantly dimmed */
     outline: none;
     transition: all var(--t-fast);
 }
@@ -27,6 +26,13 @@ textarea {
 .input:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px var(--accent-soft);
+    background: var(--bg-surface);
+}
+
+.prop-input:hover,
+.select:hover,
+.input:hover {
+    border-color: var(--text-dim);
 }
 
 .prop-input-sm {
@@ -35,10 +41,9 @@ textarea {
     font-size: 11px;
     border-radius: 4px;
     border: 1px solid var(--border-subtle);
-    background: var(--bg);
+    background: var(--prop-input-bg);
     color: var(--text-dim);
-    /* Significantly dimmed */
-    opacity: 0.8;
+    opacity: 0.9;
     outline: none;
 }
 
@@ -139,25 +144,48 @@ textarea {
     gap: 2px;
 }
 
-.item {
-    padding: 6px 10px;
-    border-radius: var(--radius-md);
-    font-size: var(--fs-base);
+/* Widget Card Style */
+.widget-list .item {
+    padding: 10px 4px;
+    border-radius: 8px;
+    font-size: 10px;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    cursor: pointer;
+    justify-content: center;
+    gap: 6px;
+    cursor: grab;
     border: 1px solid transparent;
-    color: var(--text-dim);
-    background: var(--bg-base);
+    color: var(--text-muted);
+    background: transparent;
     transition: all var(--t-fast);
+    text-align: center;
+    width: 100%;
 }
 
-.item:hover {
+.widget-list .item:hover {
     background: var(--bg-surface);
-    border-color: var(--border);
+    border-color: var(--border-subtle);
     color: var(--text);
+}
+
+.widget-list .item .widget-icon {
+    width: 32px;
+    height: 32px;
+    opacity: 0.8;
+}
+
+.widget-list .item .label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    line-height: 1.2;
+}
+
+.widget-list .item .tag {
+    display: none;
+    /* Hide tags in grid mode */
 }
 
 .item .tag {
@@ -189,36 +217,46 @@ textarea {
 }
 
 .widget-category-header {
-    padding: 6px 10px;
+    padding: 10px 12px;
     display: flex;
     align-items: center;
     gap: 8px;
     cursor: pointer;
     font-size: 10px;
-    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 800;
     color: var(--text-muted);
-    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background 0.2s;
 }
 
 .widget-category-header:hover {
-    background: var(--border-subtle);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
 }
 
 .widget-category-items {
     display: none;
-    padding-left: 12px;
-    flex-direction: column;
-    gap: 2px;
+    padding: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 4px;
 }
 
 .widget-category.expanded .widget-category-items {
-    display: flex;
+    display: grid;
 }
 
 .category-icon {
     font-size: 8px;
     opacity: 0.5;
     width: 10px;
+    transition: transform 0.2s;
+}
+
+.widget-category.expanded .category-icon {
+    transform: rotate(90deg);
 }
 
 /* Hardware Group */
@@ -799,6 +837,58 @@ kbd {
     color: var(--muted);
     transition: all 0.2s;
 }
+
+/* Collapsible Properties Sections */
+.properties-section {
+    margin-bottom: 4px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-surface);
+}
+
+.properties-section-header {
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: var(--prop-header-bg);
+    /* Distinct header color */
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    user-select: none;
+    transition: background 0.1s;
+}
+
+.properties-section-header:hover {
+    background: var(--bg-elevated);
+    color: var(--text);
+}
+
+.properties-section-header .icon {
+    font-size: 16px;
+    transition: transform 0.2s;
+    color: var(--muted);
+}
+
+.properties-section.collapsed .properties-section-header .icon {
+    transform: rotate(-90deg);
+}
+
+.properties-section-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+}
+
+.properties-section.collapsed .properties-section-content {
+    display: none;
+}
+
 
 .hierarchy-item-action:hover {
     background: var(--bg-elevated);

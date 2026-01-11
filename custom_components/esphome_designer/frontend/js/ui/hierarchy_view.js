@@ -25,6 +25,14 @@ export class HierarchyView {
             return;
         }
 
+        // Create controls container
+        this.controlsContainer = document.createElement('div');
+        this.controlsContainer.id = 'hierarchyControls';
+        this.controlsContainer.className = 'hierarchy-controls';
+        this.controlsContainer.style.padding = '8px 8px';
+        this.controlsContainer.style.borderTop = '1px solid var(--border-subtle)';
+        this.panel.appendChild(this.controlsContainer);
+
         this.bindEvents();
         this.render();
         Logger.log("[HierarchyView] Initialized");
@@ -56,6 +64,7 @@ export class HierarchyView {
                 item.classList.remove('selected');
             }
         });
+        this.renderControls();
     }
 
     render() {
@@ -70,6 +79,7 @@ export class HierarchyView {
 
         if (widgets.length === 0) {
             this.listContainer.innerHTML = '<div style="font-size: 10px; color: var(--muted); text-align: center; padding: 12px;">No widgets on this page</div>';
+            this.controlsContainer.style.display = 'none';
             return;
         }
 
@@ -80,6 +90,7 @@ export class HierarchyView {
         });
 
         this.highlightSelected();
+        this.renderControls();
     }
 
     createItem(widget, actualIndex) {
@@ -190,6 +201,89 @@ export class HierarchyView {
         });
 
         return div;
+    }
+
+    renderControls() {
+        const widget = AppState.getSelectedWidget();
+        if (!widget || AppState.selectedWidgetIds.length > 1) {
+            this.controlsContainer.style.display = 'none';
+            return;
+        }
+
+        this.controlsContainer.style.display = 'block';
+        this.controlsContainer.innerHTML = '';
+
+        const label = document.createElement("div");
+        label.style.fontSize = "10px";
+        label.style.color = "var(--muted)";
+        label.style.marginBottom = "6px";
+        label.style.fontWeight = "600";
+        label.textContent = "LAYER ORDER";
+        this.controlsContainer.appendChild(label);
+
+        const wrap = document.createElement("div");
+        wrap.style.display = "flex";
+        wrap.style.gap = "4px";
+
+        const buttons = [
+            { label: "↑ Front", action: () => this.moveToFront(widget) },
+            { label: "↓ Back", action: () => this.moveToBack(widget) },
+            { label: "▲ Up", action: () => this.moveUp(widget) },
+            { label: "▼ Down", action: () => this.moveDown(widget) }
+        ];
+
+        buttons.forEach(btn => {
+            const button = document.createElement("button");
+            button.className = "btn btn-secondary";
+            button.textContent = btn.label;
+            button.style.flex = "1";
+            button.style.fontSize = "10px";
+            button.style.padding = "4px";
+            button.addEventListener("click", () => {
+                btn.action();
+            });
+            wrap.appendChild(button);
+        });
+
+        this.controlsContainer.appendChild(wrap);
+    }
+
+    moveToFront(widget) {
+        const page = AppState.getCurrentPage();
+        const idx = page.widgets.findIndex(w => w.id === widget.id);
+        if (idx > -1 && idx < page.widgets.length - 1) {
+            page.widgets.splice(idx, 1);
+            page.widgets.push(widget);
+            AppState.setPages(AppState.pages); // Trigger update
+        }
+    }
+
+    moveToBack(widget) {
+        const page = AppState.getCurrentPage();
+        const idx = page.widgets.findIndex(w => w.id === widget.id);
+        if (idx > 0) {
+            page.widgets.splice(idx, 1);
+            page.widgets.unshift(widget);
+            AppState.setPages(AppState.pages);
+        }
+    }
+
+    moveUp(widget) {
+        const page = AppState.getCurrentPage();
+        const idx = page.widgets.findIndex(w => w.id === widget.id);
+        if (idx > -1 && idx < page.widgets.length - 1) {
+            [page.widgets[idx], page.widgets[idx + 1]] = [page.widgets[idx + 1], page.widgets[idx]];
+            AppState.setPages(AppState.pages);
+        }
+    }
+
+    moveDown(widget) {
+        const page = AppState.getCurrentPage();
+        const idx = page.widgets.findIndex(w => w.id === widget.id);
+        if (idx > 0) {
+            [page.widgets[idx], page.widgets[idx - 1]] = [page.widgets[idx - 1], page.widgets[idx]];
+            AppState.setPages(AppState.pages);
+        }
     }
 
     getWidgetLabel(widget) {

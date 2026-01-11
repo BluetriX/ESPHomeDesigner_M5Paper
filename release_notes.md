@@ -1,65 +1,35 @@
+## v0.9.0 - Major Overhaul: Modular Architecture & Redesigned UI
 
-## v0.9.0 - Major Overhaul: Modular Architecture
-
-**Release Date:** January 7, 2026
+**Release Date:** January 7, 2026 (Updated Jan 11)
 
 ### 🚀 Major Architectural Modernization
 - **Plugin-Based System:** Migrated from a 3,800+ line monolithic `yaml_export.js` to a modular architecture with **50+ independent widget plugins**.
-- **Hierarchy / Layer View:** Introduced a complete Hierarchy panel to manage widget z-index, visibility, and locking with a drag-and-drop interface.
-- **Radial Context Menu:** New right-click context menu on the canvas for rapid actions (Lock, Copy, Snap, Delete).
-- **Integrated Bug Fixes & Improvements:** Ported critical fixes including lambda indentation, LVGL display conflicts, and shape border rendering.
-- **Strict YAML Parity:** Introduced the "Time Machine" regression suite for bit-for-bit parity.
-- **Shared Constants Engine:** Centralized layout "magic numbers" into `layout_constants.js`.
-- **Enhanced Deployment Pattern:** Optimized for HACS and GitHub Pages dual-deployment.
+- **Shared Constants Engine:** Centralized layout "magic numbers" into `layout_constants.js`, ensuring pixel-perfect consistency.
+- **Strict YAML Parity:** Introduced the "Time Machine" regression suite for bit-for-bit parity with legacy exports.
+- **Enhanced Deployment Pattern:** Optimized for HACS (Home Assistant) and GitHub Pages (Standalone) dual-deployment.
+
+### 🎨 GUI Overhaul & User Experience
+- **Responsive Widget Palette**: Redesigned the widget selector into a modern grid layout with large, high-fidelity icons and clear labeling, optimizing space and accessibility.
+- **Accordion Properties Panel**: Organized widget settings into collapsible semantic sections (Transform, Appearance, Data Source, Common LVGL, etc.), significantly reducing cognitive load and scrolling.
+- **Theme-Aware Visual Hierarchy**: Implemented a refined contrast system for both Light and Dark modes. Property headers and input fields now use adaptive backgrounds for better clarity and distinction.
+- **Relocated Layer Controls**: Moved "Layer Order" buttons (Front/Back/Up/Down) to the Hierarchy panel, aligning spatial management with the visual object list.
+- **Inline Text Editing**: Double-click any text widget on the canvas to edit it instantly.
+- **Advanced Multi-Selection**: Full synchronization between Canvas, Hierarchy View, and YAML Editor, including bulk property updates.
+- **Drop Shadow Tool**: One-click "Create Drop Shadow" for shapes, generating theme-aware shadows based on active interface mode.
 
 ### 🐛 Bug Fixes & Improvements
-- **Core Adapter Fixes**:
-  - Fixed lambda indentation issues in exported YAML.
-  - Resolved conflicts between LVGL and generic display hardware configurations.
-  - Ensured rotation and touch transformation are correctly applied for specific hardware (e.g., Waveshare 7").
-- **Widget Plugin Fixes**:
-  - **Progress Bar**: Fixed missing entity prefix (GitHub #154) and added consistent ID sanitization.
-  - **Shapes (Rect/Circle)**: Fixed border rendering when fill is enabled and ensured rounded integer coordinates to prevent artifacts.
-  - **Calendar**: Fixed event display overlapping and added `max_events` property to limit displayed items.
-  - **Sensor Text**: Fixed label rendering for "Value Only" mode (GitHub #128) and added robust friendly name fallback for empty titles. Improved automatic unit spacing.
-  - **Template Sensor Bar**: Standardized temperature unit handling.
-- **Improved Robustness**: 
-  - Added presence checks (`has_state()`, `isnan()`) for sensor values across multiple widgets.
-  - Implemented auto-registration for Home Assistant entities in the YAML sensor section to prevent missing ID errors.
-
-**Release Date:** January 7, 2026
+- **Touch Area Consolidation**: Unified duplicate touch logic into a single robust implementation with Normal/Pressed icon pickers and RGBA color support.
+- **Core Adapter Fixes**: Fixed lambda indentation, resolved LVGL display conflicts, and improved rotation/touch mapping for Waveshare 7" displays.
+- **Widget Specific Fixes**: Resolved rendering bugs for Progress Bars (sanitization), Shapes (border/fill), and Calendars (event overlapping).
+- **Improved Robustness**: Added global presence checks (`has_state()`) and automated sensor registration in YAML to prevent missing ID errors.
 
 > [!WARNING]
 > **BREAKING CHANGES**
-> - **Project Compatibility:** Saved projects from versions prior to 0.9.0 will **not be automatically imported**. We strongly recommend backing up your old project JSON files or YAML snippets before updating. You may need to manually re-import your YAML via the "Import project from YAML" feature once in v0.9.0.
-> - **Branding Rename:** The legacy `reterminal_dashboard` domain has been retired. The integration is now officially **`esphome_designer`**. You may need to re-add the integration if updating from a very old version.
-> - **Entry Point Changed:** Access the designer via `/esphome-designer/index.html` (previously `editor.html`). 
-> - **Folder Structure:** The custom component folder is now `esphome_designer`.
+> - **Project Compatibility:** Saved projects from versions prior to 0.9.0 will **not be automatically imported**. We strongly recommend backing up your old project JSON files or YAML snippets before updating.
+> - **Branding Rename:** The legacy `reterminal_dashboard` domain has been retired. The integration is now officially **`esphome_designer`**.
 
-### 🚀 Major Architectural Modernization
-- **Plugin-Based System:** Migrated from a 3,800+ line monolithic `yaml_export.js` to a modular architecture with **50+ independent widget plugins**. This makes the project significantly faster, cleaner, and easier to scale.
-- **Strict YAML Parity:** Introduced the "Time Machine" regression suite. Every single character of generated YAML now matches the legacy system bit-for-bit, ensuring zero regressions for existing users.
-- **Shared Constants Engine:** Centralized layout "magic numbers" (widget sizes, font IDs) into `layout_constants.js`, ensuring pixel-perfect consistency between the canvas preview and the final device output.
-- **Enhanced Deployment Pattern:** The project structure is now optimized for both **HACS** (Home Assistant) and **GitHub Pages** (Standalone) dual-deployment.
 
-### ✨ Improvements & UI Polish
-- **Inline Text Editing**: Double-click any text widget on the canvas to edit it instantly. No more hunting through the properties panel for simple text changes.
-- **Advanced Multi-Selection**: 
-  - **Full Synchronization**: Selection state is now perfectly synced between Canvas, Hierarchy View, and YAML Editor.
-  - **YAML Snippet Highlighting**: The YAML editor now highlights the code for *all* selected widgets simultaneously, enabling easy bulk-copying.
-  - **Canvas Interactions**: Reliable `Shift+Click` and `Ctrl+Click` support for toggling widget selection.
-  - **Hierarchy View**: Multi-select support (Ctrl/Shift) with visual highlighting for all active items.
-- **Drop Shadow Tool**: Added a one-click "Create Drop Shadow" feature for shapes. Automatically generates a theme-aware shadow (White in Dark Mode, Black in Light Mode) directly behind the selected widget.
-- **Dismissible Warning Banner:** The "Local File" warning is now softer and can be dismissed for the current session.
-- **Developer Experience:** 
-  - Added strict **JSDoc Type Definitions** for the Plugin API, providing built-in intelligence for contributors.
-  - Moved build tooling to root for standard `npm` workflows.
-  - Comprehensive `CONTRIBUTING.md` guide for new developers.
-
-### 🔧 Performance & Stability
-- **Sub-Second YAML Generation:** The new adapter orchestrator is significantly more efficient than the legacy string-concatenation approach.
-- **Reduced Memory Footprint:** Modular loading ensures only the necessary features are processed during export.
-- **Production-Ready Builds:** Integrated Vite for optimized asset bundling and faster load times.
+---
 
 ---
 
