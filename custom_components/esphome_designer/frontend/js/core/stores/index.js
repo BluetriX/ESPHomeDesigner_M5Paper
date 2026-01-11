@@ -149,8 +149,8 @@ class AppStateFacade {
         emit(EVENTS.STATE_CHANGED);
     }
 
-    addWidget(w) {
-        this.project.addWidget(w);
+    addWidget(w, pageIndex = null) {
+        this.project.addWidget(w, pageIndex);
         this.recordHistory();
         this.selectWidget(w.id);
         emit(EVENTS.STATE_CHANGED);

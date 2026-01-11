@@ -111,9 +111,14 @@ export class ProjectStore {
         emit(EVENTS.PAGE_CHANGED, { index: this.state.currentPageIndex });
     }
 
-    /** @param {import("../../types.js").WidgetConfig} widget */
-    addWidget(widget) {
-        const page = this.getCurrentPage();
+    /** 
+     * @param {import("../../types.js").WidgetConfig} widget 
+     * @param {number|null} targetPageIndex
+     */
+    addWidget(widget, targetPageIndex = null) {
+        const index = targetPageIndex !== null ? targetPageIndex : this.state.currentPageIndex;
+        const page = this.state.pages[index] || this.getCurrentPage();
+
         page.widgets.push(widget);
         this.state.widgetsById.set(widget.id, widget);
         emit(EVENTS.STATE_CHANGED);

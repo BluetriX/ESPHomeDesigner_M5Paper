@@ -572,16 +572,18 @@ export function setupDragAndDrop(canvasInstance) {
             return;
         }
 
+        // IMPORTANT: Capture the rect and page index BEFORE switching AppState.currentPageIndex.
+        // Switching the page triggers a synchronous re-render that might detach this artboardEl.
         const pageIndex = parseInt(artboardEl.dataset.index, 10);
+        const rect = artboardEl.getBoundingClientRect();
+        const zoom = AppState.zoomLevel;
+
         if (AppState.currentPageIndex !== pageIndex) {
             AppState.setCurrentPageIndex(pageIndex);
         }
 
         if (type) {
-            const rect = artboardEl.getBoundingClientRect();
-            const zoom = AppState.zoomLevel;
-
-            // Calculate position relative to the target artboard
+            // Calculate position relative to the target artboard (using the rect captured above)
             const x = (e.clientX - rect.left) / zoom;
             const y = (e.clientY - rect.top) / zoom;
 
@@ -591,7 +593,8 @@ export function setupDragAndDrop(canvasInstance) {
                 widget.x = Math.round(x - widget.width / 2);
                 widget.y = Math.round(y - widget.height / 2);
 
-                AppState.addWidget(widget);
+                // Add to the specific page index we dropped on
+                AppState.addWidget(widget, pageIndex);
             } catch (err) {
                 Logger.error("[Canvas] error creating widget from drop:", err);
             }
