@@ -80,6 +80,7 @@ vi.mock('../../js/io/adapters/base_adapter.js', () => ({
         async generate() { return ""; }
         generatePage() { return []; }
         generateWidget() { return []; }
+        async preProcessWidgets() { return; }
         sanitize(s) { return s; }
     }
 }));
@@ -153,5 +154,37 @@ describe('ESPHomeAdapter', () => {
         const yaml = await adapter.generate(projectState);
         expect(yaml).toContain('Test Device'); // From profile name
         expect(yaml).toContain('// page:name "Empty"');
+    });
+
+    it('should generate correct condition properties for state comparison', () => {
+        const widget = {
+            condition_entity: 'switch.test',
+            condition_operator: '==',
+            condition_state: 'on',
+            condition_min: '0',
+            condition_max: '100'
+        };
+        const props = adapter.getCondProps(widget);
+        expect(props).toContain('cond_ent:"switch.test"');
+        expect(props).toContain('cond_op:"=="');
+        expect(props).toContain('cond_state:"on"');
+        expect(props).not.toContain('cond_min');
+        expect(props).not.toContain('cond_max');
+    });
+
+    it('should generate correct condition properties for range comparison', () => {
+        const widget = {
+            condition_entity: 'sensor.temp',
+            condition_operator: 'range',
+            condition_state: 'on',
+            condition_min: '20',
+            condition_max: '30'
+        };
+        const props = adapter.getCondProps(widget);
+        expect(props).toContain('cond_ent:"sensor.temp"');
+        expect(props).toContain('cond_op:"range"');
+        expect(props).toContain('cond_min:"20"');
+        expect(props).toContain('cond_max:"30"');
+        expect(props).not.toContain('cond_state');
     });
 });

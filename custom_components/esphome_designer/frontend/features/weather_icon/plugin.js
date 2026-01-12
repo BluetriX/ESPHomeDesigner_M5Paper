@@ -69,6 +69,89 @@ const render = (el, widget, { getColorStyle }) => {
     }
 };
 
+const exportDoc = (w, context) => {
+    const {
+        lines, addFont, getColorConst, getCondProps, getConditionCheck
+    } = context;
+
+    const p = w.props || {};
+    const entityId = (w.entity_id || "").trim();
+    const size = parseInt(p.size || 48, 10);
+    const colorProp = p.color || "black";
+
+    const color = getColorConst(colorProp);
+    const fontRef = addFont("Material Design Icons", 400, size);
+
+    lines.push(`        // widget:weather_icon id:${w.id} type:weather_icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId} size:${size} color:${colorProp} ${getCondProps(w)}`);
+
+    const cond = getConditionCheck(w);
+    if (cond) lines.push(`        ${cond}`);
+
+    if (entityId) {
+        const safeId = entityId.replace(/[^a-zA-Z0-9_]/g, "_");
+        // Generate dynamic weather icon mapping based on entity state
+        lines.push(`        {`);
+        lines.push(`          std::string weather_state = id(${safeId}).state;`);
+        lines.push(`          const char* icon = "\\U000F0599"; // Default: sunny`);
+        lines.push(`          if (weather_state == "clear-night") icon = "\\U000F0594";`);
+        lines.push(`          else if (weather_state == "cloudy") icon = "\\U000F0590";`);
+        lines.push(`          else if (weather_state == "exceptional") icon = "\\U000F0026";`);
+        lines.push(`          else if (weather_state == "fog") icon = "\\U000F0591";`);
+        lines.push(`          else if (weather_state == "hail") icon = "\\U000F0592";`);
+        lines.push(`          else if (weather_state == "lightning") icon = "\\U000F0593";`);
+        lines.push(`          else if (weather_state == "lightning-rainy") icon = "\\U000F067E";`);
+        lines.push(`          else if (weather_state == "partlycloudy") icon = "\\U000F0595";`);
+        lines.push(`          else if (weather_state == "pouring") icon = "\\U000F0596";`);
+        lines.push(`          else if (weather_state == "rainy") icon = "\\U000F0597";`);
+        lines.push(`          else if (weather_state == "snowy") icon = "\\U000F0598";`);
+        lines.push(`          else if (weather_state == "snowy-rainy") icon = "\\U000F067F";`);
+        lines.push(`          else if (weather_state == "sunny") icon = "\\U000F0599";`);
+        lines.push(`          else if (weather_state == "windy") icon = "\\U000F059D";`);
+        lines.push(`          else if (weather_state == "windy-variant") icon = "\\U000F059E";`);
+
+        lines.push(`          it.printf(${w.x}, ${w.y}, id(${fontRef}), ${color}, "%s", icon);`);
+        lines.push(`        }`);
+    } else {
+        // Fallback preview
+        lines.push(`        it.printf(${w.x}, ${w.y}, id(${fontRef}), ${color}, "\\U000F0595");`);
+    }
+
+    if (cond) lines.push(`        }`);
+};
+
+const onExportTextSensors = (context) => {
+    const { lines, widgets } = context;
+    if (!widgets || widgets.length === 0) return;
+
+    const weatherEntities = new Set();
+    for (const w of widgets) {
+        if (w.type !== "weather_icon") continue;
+        const entityId = (w.entity_id || "").trim();
+        if (entityId && entityId.startsWith("weather.")) {
+            weatherEntities.add(entityId);
+        }
+    }
+
+    if (weatherEntities.size > 0) {
+        lines.push("  # Weather Entity Sensors (Detected from Weather Icon)");
+        for (const entityId of weatherEntities) {
+            const safeId = entityId.replace(/[^a-zA-Z0-9_]/g, "_");
+            lines.push(`  - platform: homeassistant`);
+            lines.push(`    id: ${safeId}`);
+            lines.push(`    entity_id: ${entityId}`);
+            lines.push(`    internal: true`);
+        }
+        lines.push("");
+    }
+};
+
+const collectRequirements = (widget, { trackIcon }) => {
+    const props = widget.props || {};
+    const size = props.size || 48;
+    // Track all possible weather icons
+    ["F0594", "F0590", "F0026", "F0591", "F0592", "F0593", "F067E", "F0595", "F0596", "F0597", "F0598", "F067F", "F0599", "F059D", "F059E"].forEach(c => trackIcon(c, size));
+};
+
 export default {
     id: "weather_icon",
     name: "Weather Icon",
@@ -78,5 +161,8 @@ export default {
         color: "black",
         fit_icon_to_frame: true
     },
-    render
+    render,
+    collectRequirements,
+    onExportTextSensors,
+    export: exportDoc
 };

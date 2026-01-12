@@ -166,7 +166,7 @@ export function serializeWidget(w) {
  */
 function transpileToLVGL(w, profile) {
     const p = w.props || {};
-    const hasTouch = profile?.touch;
+    const hasTouch = profile?.touch || (profile?.features && profile.features.touch);
 
     // Convert coordinates to integers
     const x = Math.round(w.x || 0);

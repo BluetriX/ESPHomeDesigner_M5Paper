@@ -92,6 +92,8 @@ export function setupInteractions(canvasInstance) {
     canvasInstance.canvas.addEventListener("mousedown", (ev) => {
         if (ev.button !== 0) return; // Only handle left-click for widgets
 
+        clearSnapGuides(); // Clean up any stale guides immediately
+
         const artboardEl = ev.target.closest(".artboard");
         if (!artboardEl) {
             // Clicked on stage background - release focus from inputs (e.g. YAML box)
@@ -226,8 +228,10 @@ export function onMouseMove(ev, canvasInstance) {
 
     if (canvasInstance.dragState) {
         if (canvasInstance.dragState.mode === "move") {
-            const artboardEl = canvasInstance.dragState.artboardEl;
-            if (!artboardEl) return;
+            // Re-query artboard to ensure it's still valid/attached
+            const currentArtboardEl = document.querySelector(`.artboard[data-index="${AppState.currentPageIndex}"]`);
+            if (!currentArtboardEl) return;
+
             // Delta-based calculation
             const mouseDx = (ev.clientX - canvasInstance.dragState.dragStartX) / zoom;
             const mouseDy = (ev.clientY - canvasInstance.dragState.dragStartY) / zoom;
@@ -244,13 +248,19 @@ export function onMouseMove(ev, canvasInstance) {
             // Snap logic using the primary widget
             const page = AppState.getCurrentPage();
             if (page?.layout && !ev.altKey) {
+                clearSnapGuides();
                 const snappedToGrid = snapToGridCell(targetX, targetY, primaryWidget.width, primaryWidget.height, page.layout, dims);
                 targetX = snappedToGrid.x;
                 targetY = snappedToGrid.y;
             } else {
-                const snapped = applySnapToPosition(canvasInstance, primaryWidget, targetX, targetY, ev.altKey, dims);
-                targetX = snapped.x;
-                targetY = snapped.y;
+                // Determine if we should snap
+                if (AppState.snapEnabled && !ev.altKey) {
+                    const snapped = applySnapToPosition(canvasInstance, primaryWidget, targetX, targetY, ev.altKey, dims, currentArtboardEl);
+                    targetX = snapped.x;
+                    targetY = snapped.y;
+                } else {
+                    clearSnapGuides();
+                }
             }
 
             // Calculate exact displacement applied (including snap)
@@ -377,7 +387,7 @@ export function onMouseUp(ev, canvasInstance) {
                     window.removeEventListener("mousemove", canvasInstance._boundMouseMove);
                     window.removeEventListener("mouseup", canvasInstance._boundMouseUp);
                     canvasInstance.dragState = null;
-                    clearSnapGuides(canvasInstance);
+                    clearSnapGuides();
 
                     const success = AppState.moveWidgetToPage(widgetId, targetPageIndex, startX, startY);
                     if (success) {
@@ -392,7 +402,7 @@ export function onMouseUp(ev, canvasInstance) {
         window.removeEventListener("mousemove", canvasInstance._boundMouseMove);
         window.removeEventListener("mouseup", canvasInstance._boundMouseUp);
         canvasInstance.dragState = null;
-        clearSnapGuides(canvasInstance);
+        clearSnapGuides();
 
         updateWidgetGridCell(widgetId);
 

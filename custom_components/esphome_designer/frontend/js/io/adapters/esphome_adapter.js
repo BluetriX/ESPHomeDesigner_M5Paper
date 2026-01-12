@@ -48,7 +48,9 @@ export class ESPHomeAdapter extends BaseAdapter {
         const pages = layout.pages || [];
         const model = layout.device_model || (AppState ? AppState.deviceModel : null) || window.currentDeviceModel || "reterminal_e1001";
 
-        const profiles = DEVICE_PROFILES || window.DEVICE_PROFILES || {};
+        const importedProfiles = DEVICE_PROFILES || {};
+        const globalProfiles = window.DEVICE_PROFILES || {};
+        const profiles = { ...importedProfiles, ...globalProfiles };
         let profile = profiles[model] || {};
         // console.log(`[ESPHomeAdapter] Model: ${model}`);
         // console.log(`[ESPHomeAdapter] Profile features:`, JSON.stringify(profile.features));
@@ -168,7 +170,6 @@ export class ESPHomeAdapter extends BaseAdapter {
             globalLines.push("- id: page_refresh_default_s", "  type: int", "  restore_value: true", `  initial_value: '${defaultRefresh}'`);
             globalLines.push("- id: page_refresh_current_s", "  type: int", "  restore_value: false", "  initial_value: '60'");
             globalLines.push("- id: last_page_switch_time", "  type: uint32_t", "  restore_value: false", "  initial_value: '0'");
-
             PluginRegistry.onExportGlobals({ ...context, lines: globalLines });
             if (globalLines.length > 0) {
                 lines.push("globals:");
@@ -197,8 +198,17 @@ export class ESPHomeAdapter extends BaseAdapter {
                 if (Generators.generateRTTTLSection) lines.push(...Generators.generateRTTTLSection(profile));
                 if (Generators.generateAudioSection) lines.push(...Generators.generateAudioSection(profile));
 
-                // Time
-                lines.push("time:", "  - platform: homeassistant", "    id: ha_time");
+                // Time (Home Assistant variant, required for datetime plugin and many scripts)
+                const hasTime = lines.some(l => String(l).split('\n').some(subL => subL.trim() === "time:"));
+                if (!hasTime) {
+                    lines.push("time:", "  - platform: homeassistant", "    id: ha_time");
+                }
+            } else {
+                // For package-based, we STILL want the time block if not present
+                const hasTime = lines.some(l => String(l).split('\n').some(subL => subL.trim() === "time:"));
+                if (!hasTime) {
+                    lines.push("time:", "  - platform: homeassistant", "    id: ha_time");
+                }
             }
 
             // Numeric Sensors
@@ -434,11 +444,9 @@ export class ESPHomeAdapter extends BaseAdapter {
                     const p = w.props || {};
                     const addIcon = (name, size) => this.fonts.trackIcon(name, size);
 
-                    if (t === "weather_icon") ["F0594", "F0590", "F0026", "F0591", "F0592", "F0593", "F067E", "F0595", "F0596", "F0597", "F0598", "F067F", "F0599", "F059D", "F059E"].forEach(c => addIcon(c, p.size || 48));
-                    else if (t === "weather_forecast") ["F0594", "F0590", "F0026", "F0591", "F0592", "F0593", "F067E", "F0595", "F0596", "F0597", "F0598", "F067F", "F0599", "F059D", "F059E"].forEach(c => addIcon(c, p.icon_size || 32));
+                    if (t === "weather_forecast") ["F0594", "F0590", "F0026", "F0591", "F0592", "F0593", "F067E", "F0595", "F0596", "F0597", "F0598", "F067F", "F0599", "F059D", "F059E"].forEach(c => addIcon(c, p.icon_size || 32));
                     else if (t === "battery_icon") ["F0079", "F007A", "F007B", "F007C", "F007D", "F007E", "F007F", "F0080", "F0081", "F0082", "F0083"].forEach(c => addIcon(c, p.size || 24));
                     else if (t === "wifi_signal") ["F092B", "F091F", "F0922", "F0925", "F0928"].forEach(c => addIcon(c, p.size || 24));
-                    else if (t === "touch_area") { if (p.icon) addIcon(p.icon, p.icon_size || 40); if (p.icon_pressed) addIcon(p.icon_pressed, p.icon_size || 40); }
                     else if (t === "ondevice_temperature") ["F0E4C", "F050F", "F10C2"].forEach(c => addIcon(c, p.size || 32));
                     else if (t === "ondevice_humidity") ["F0E7A", "F058E", "F058C"].forEach(c => addIcon(c, p.size || 32));
                     else if (t === "template_sensor_bar") ["F092B", "F091F", "F0922", "F0925", "F0928", "F0E4C", "F050F", "F10C2", "F0E7A", "F058E", "F058C", "F0079", "F007E", "F007B", "F0082", "F0083"].forEach(c => addIcon(c, p.icon_size || 20));
@@ -659,11 +667,17 @@ export class ESPHomeAdapter extends BaseAdapter {
     }
 
     getCondProps(w) {
-        if (!w.condition_entity) return "";
-        let s = ` cond_ent:"${w.condition_entity}" cond_op:"${w.condition_operator || "=="}"`;
-        if (w.condition_state) s += ` cond_state:"${w.condition_state}"`;
-        if (w.condition_min) s += ` cond_min:"${w.condition_min}"`;
-        if (w.condition_max) s += ` cond_max:"${w.condition_max}"`;
+        const ent = (w.condition_entity || "").trim();
+        if (!ent) return "";
+        const op = w.condition_operator || "==";
+        let s = ` cond_ent:"${ent}" cond_op:"${op}"`;
+
+        if (op === "range") {
+            if (w.condition_min !== undefined && w.condition_min !== null) s += ` cond_min:"${w.condition_min}"`;
+            if (w.condition_max !== undefined && w.condition_max !== null) s += ` cond_max:"${w.condition_max}"`;
+        } else {
+            if (w.condition_state !== undefined && w.condition_state !== null) s += ` cond_state:"${w.condition_state}"`;
+        }
         return s;
     }
 

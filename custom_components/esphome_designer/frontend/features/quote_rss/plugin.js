@@ -164,6 +164,155 @@ const render = (element, widget, helpers) => {
     element.appendChild(feedDiv);
 };
 
+const exportDoc = (w, context) => {
+    const {
+        lines, addFont, getColorConst, getCondProps, getConditionCheck, getAlignX
+    } = context;
+
+    const p = w.props || {};
+    const quoteFontSize = parseInt(p.quote_font_size || 18, 10);
+    const authorFontSize = parseInt(p.author_font_size || 14, 10);
+    const fontFamily = p.font_family || "Roboto";
+    const fontWeight = parseInt(p.font_weight || 400, 10);
+    const colorProp = p.color || "black";
+    const color = getColorConst(colorProp);
+    const textAlign = p.text_align || "TOP_LEFT";
+    const italicQuote = p.italic_quote !== false;
+    const wordWrap = p.word_wrap !== false;
+
+    const safeIdPrefix = `quote_${w.id.replace(/-/g, "_")}`;
+    const quoteTextGlobal = `${safeIdPrefix}_text_global`;
+    const quoteAuthorGlobal = `${safeIdPrefix}_author_global`;
+
+    const quoteFontId = addFont(fontFamily, fontWeight, quoteFontSize, italicQuote);
+    const authorFontId = addFont(fontFamily, fontWeight, authorFontSize, false);
+
+    lines.push(`        // widget:quote_rss id:${w.id} type:quote_rss x:${w.x} y:${w.y} w:${w.width} h:${w.height} color:${colorProp} align:${textAlign} ${getCondProps(w)}`);
+
+    const cond = getConditionCheck(w);
+    if (cond) lines.push(`        ${cond}`);
+
+    lines.push(`        {`);
+    lines.push(`          std::string q_text = id(${quoteTextGlobal});`);
+    if (p.show_author !== false) {
+        lines.push(`          std::string q_author = id(${quoteAuthorGlobal});`);
+    }
+
+    if (wordWrap) {
+        lines.push(`          int max_w = ${w.width - 16};`);
+        lines.push(`          int q_h = ${quoteFontSize + 4};`);
+        lines.push(`          std::string display_text = "\\"" + q_text + "\\"";`);
+
+        lines.push(`          auto print_q = [&](esphome::font::Font *f, int line_h, bool draw) -> int {`);
+        lines.push(`            int y_curr = ${w.y + 8};`);
+        lines.push(`            std::string curr_line = "";`);
+        lines.push(`            size_t pos = 0; size_t space_pos;`);
+        lines.push(`            while ((space_pos = display_text.find(' ', pos)) != std::string::npos) {`);
+        lines.push(`                std::string word = display_text.substr(pos, space_pos - pos);`);
+        lines.push(`                std::string test_line = curr_line.empty() ? word : curr_line + " " + word;`);
+        lines.push(`                int w_m, h_m, xoff_m, bl_m;`);
+        lines.push(`                f->measure(test_line.c_str(), &w_m, &xoff_m, &bl_m, &h_m);`);
+        lines.push(`                if (w_m > max_w && !curr_line.empty()) {`);
+        lines.push(`                    if (draw) it.printf(${w.x + 8}, y_curr, f, ${color}, "%s", curr_line.c_str());`);
+        lines.push(`                    y_curr += line_h;`);
+        lines.push(`                    curr_line = word;`);
+        lines.push(`                } else { curr_line = test_line; }`);
+        lines.push(`                pos = space_pos + 1;`);
+        lines.push(`            }`);
+        lines.push(`            if (!curr_line.empty()) {`);
+        lines.push(`                std::string rem = display_text.substr(pos);`);
+        lines.push(`                if (!curr_line.empty()) curr_line += " "; curr_line += rem;`);
+        lines.push(`            }`);
+        lines.push(`            if (!curr_line.empty()) {`);
+        lines.push(`                if (draw) it.printf(${w.x + 8}, y_curr, f, ${color}, "%s", curr_line.c_str());`);
+        lines.push(`                y_curr += line_h;`);
+        lines.push(`            }`);
+        lines.push(`            return y_curr - ${w.y + 8};`);
+        lines.push(`          };`);
+        lines.push(`          print_q(id(${quoteFontId}), q_h, true);`);
+
+        if (p.show_author !== false) {
+            lines.push(`          if (!q_author.empty()) it.printf(${w.x + 8}, ${w.y} + ${w.height} - ${authorFontSize + 4}, id(${authorFontId}), ${color}, "— %s", q_author.c_str());`);
+        }
+    } else {
+        const alignX = getAlignX(textAlign, w.x, w.width);
+        const esphomeAlign = `TextAlign::${textAlign}`;
+        lines.push(`          it.printf(${alignX}, ${w.y}, id(${quoteFontId}), ${color}, ${esphomeAlign}, "\\"%s\\"", q_text.c_str());`);
+        if (p.show_author !== false) {
+            lines.push(`          if (!q_author.empty()) it.printf(${alignX}, ${w.y + quoteFontSize + 4}, id(${authorFontId}), ${color}, ${esphomeAlign}, "— %s", q_author.c_str());`);
+        }
+    }
+
+    lines.push(`        }`);
+
+    if (cond) lines.push(`        }`);
+};
+
+const onExportGlobals = (context) => {
+    const { lines, widgets } = context;
+    widgets.filter(w => w.type === "quote_rss").forEach(w => {
+        const safeIdPrefix = `quote_${w.id.replace(/-/g, "_")}`;
+        lines.push(`  - id: ${safeIdPrefix}_text_global`);
+        lines.push(`    type: std::string`);
+        lines.push(`    restore_value: true`);
+        lines.push(`    initial_value: '""'`);
+        if (w.props && w.props.show_author !== false) {
+            lines.push(`  - id: ${safeIdPrefix}_author_global`);
+            lines.push(`    type: std::string`);
+            lines.push(`    restore_value: true`);
+            lines.push(`    initial_value: '""'`);
+        }
+    });
+};
+
+const onExportTextSensors = (context) => {
+    const { lines, widgets, displayId } = context;
+    const targets = widgets.filter(w => w.type === "quote_rss");
+
+    if (targets.length > 0) {
+        lines.push("");
+        lines.push("  # Quote RSS Widget Update Loop");
+        lines.push("interval:");
+        for (const w of targets) {
+            const p = w.props || {};
+            const refreshInterval = p.refresh_interval || "1h";
+            const safeIdPrefix = `quote_${w.id.replace(/-/g, "_")}`;
+            const feedUrl = p.feed_url || "https://www.brainyquote.com/link/quotebr.rss";
+
+            // Note: In production, the proxy URL should be the HA internal URL.
+            // Using a relative-ish placeholder for now as the actual URL depends on user setup.
+            const proxyUrl = `/api/esphome_designer/rss_proxy?url=${encodeURIComponent(feedUrl)}`;
+
+            lines.push(`  - interval: ${refreshInterval}`);
+            lines.push(`    startup_delay: 20s`);
+            lines.push(`    then:`);
+            lines.push(`      - if:`);
+            lines.push(`          condition:`);
+            lines.push(`            wifi.connected:`);
+            lines.push(`          then:`);
+            lines.push(`            - http_request.get:`);
+            lines.push(`                url: "${proxyUrl}"`);
+            lines.push(`                capture_response: true`);
+            lines.push(`                on_response:`);
+            lines.push(`                  - lambda: |-`);
+            lines.push(`                      if (response->status_code == 200) {`);
+            lines.push(`                        DynamicJsonDocument doc(4096);`);
+            lines.push(`                        deserializeJson(doc, body);`);
+            lines.push(`                        if (doc.containsKey("success") && doc["success"].as<bool>()) {`);
+            lines.push(`                          JsonObject q = doc["quote"];`);
+            lines.push(`                          if (!q.isNull()) {`);
+            lines.push(`                            id(${safeIdPrefix}_text_global) = q["quote"].as<std::string>();`);
+            if (p.show_author !== false) {
+                lines.push(`                            id(${safeIdPrefix}_author_global) = q["author"].as<std::string>();`);
+            }
+            lines.push(`                            id(${displayId}).update();`);
+            lines.push(`                          }`);
+            lines.push(`                        }`);
+            lines.push(`                      }`);
+        }
+    }
+};
+
 export default {
     id: "quote_rss",
     name: "Quote RSS",
@@ -180,7 +329,11 @@ export default {
         italic_quote: true,
         word_wrap: true,
         width: 400,
-        height: 120
+        height: 120,
+        refresh_interval: "1h"
     },
-    render
+    render,
+    onExportGlobals,
+    onExportTextSensors,
+    export: exportDoc
 };

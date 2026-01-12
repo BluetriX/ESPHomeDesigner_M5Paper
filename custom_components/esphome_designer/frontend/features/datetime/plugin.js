@@ -21,6 +21,8 @@ const render = (el, widget, { getColorStyle }) => {
     };
     applyAlign(textAlign, el);
 
+    const format = props.format || "time_date";
+
     const timeDiv = document.createElement("div");
     timeDiv.style.fontSize = `${props.time_font_size || 28}px`;
     timeDiv.style.color = color;
@@ -35,8 +37,14 @@ const render = (el, widget, { getColorStyle }) => {
     dateDiv.style.opacity = "0.8";
     dateDiv.textContent = "Monday, Jan 1"; // Preview value
 
-    el.appendChild(timeDiv);
-    el.appendChild(dateDiv);
+    if (format === "time_only") {
+        el.appendChild(timeDiv);
+    } else if (format === "date_only") {
+        el.appendChild(dateDiv);
+    } else {
+        el.appendChild(timeDiv);
+        el.appendChild(dateDiv);
+    }
 };
 
 export default {

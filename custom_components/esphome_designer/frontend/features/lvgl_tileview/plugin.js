@@ -30,6 +30,18 @@ const render = (el, widget, { getColorStyle }) => {
     }
 };
 
+const exportLVGL = (w, context) => {
+    const { getObjectDescriptor } = context;
+    // const props = w.props || {};
+
+    const obj = getObjectDescriptor(w);
+    obj.type = "tileview";
+    // Tileview is basically a container with scrollable functionality
+    // Specific pages are usually children. 
+
+    return obj;
+};
+
 export default {
     id: "lvgl_tileview",
     name: "Tileview",
@@ -37,5 +49,6 @@ export default {
     defaults: {
         bg_color: "white"
     },
-    render
+    render,
+    exportLVGL
 };

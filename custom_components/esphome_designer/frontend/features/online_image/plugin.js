@@ -80,9 +80,11 @@ const exportLVGL = (w, { common, convertColor }) => {
     };
 };
 
+const getSafeId = (w) => `online_img_${w.id.replace(/-/g, "_")}`;
+
 const exportDoc = (w, context) => {
     const {
-        lines, getColorConst, getCondProps, getConditionCheck, profile
+        lines, getCondProps, getConditionCheck
     } = context;
 
     const p = w.props || {};
@@ -90,9 +92,9 @@ const exportDoc = (w, context) => {
     const invert = !!p.invert;
     const renderMode = p.render_mode || "Auto";
 
-    const safeId = `online_image_${w.id.replace(/-/g, "_")}`;
+    const safeId = getSafeId(w);
 
-    lines.push(`        // widget:online_image id:${w.id} type:online_image x:${w.x} y:${w.y} w:${w.width} h:${w.height} url:"${url}" invert:${invert} render_mode:"${renderMode}" ${getCondProps(w)}`);
+    lines.push(`        // widget:${w.type} id:${w.id} x:${w.x} y:${w.y} w:${w.width} h:${w.height} url:"${url}" invert:${invert} render_mode:"${renderMode}" ${getCondProps(w)}`);
 
     const cond = getConditionCheck(w);
     if (cond) lines.push(`        ${cond}`);
@@ -108,14 +110,15 @@ const exportDoc = (w, context) => {
 
 const onExportComponents = (context) => {
     const { lines, widgets, profile } = context;
-    const targets = widgets.filter(w => w.type === 'online_image');
+    const targets = widgets.filter(w => w.type === 'online_image' || w.type === 'puppet');
 
     if (targets.length > 0) {
         lines.push("online_image:");
         targets.forEach(w => {
             const p = w.props || {};
             const url = (p.url || "").trim();
-            const safeId = `online_image_${w.id.replace(/-/g, "_")}`;
+            const safeId = getSafeId(w);
+            if (!url) return;
 
             let format = (p.format || "PNG").toUpperCase();
             if (format === "JPG") format = "JPEG";

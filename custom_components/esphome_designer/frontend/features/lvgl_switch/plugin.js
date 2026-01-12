@@ -55,7 +55,7 @@ const exportLVGL = (w, { common, convertColor, formatOpacity, profile }) => {
             on_value: undefined
         }
     };
-    if (w.entity_id && hasTouch) {
+    if (w.entity_id) {
         switchObj.switch.on_value = [{ "homeassistant.service": { service: "homeassistant.toggle", data: { entity_id: w.entity_id } } }];
     }
     return switchObj;

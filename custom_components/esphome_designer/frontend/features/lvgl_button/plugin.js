@@ -48,7 +48,7 @@ const exportLVGL = (w, { common, convertColor, formatOpacity, profile }) => {
         }
     };
 
-    if (w.entity_id && hasTouch) {
+    if (w.entity_id) {
         const safeEntity = w.entity_id.trim();
         let action = [];
         if (safeEntity.startsWith("switch.") || safeEntity.startsWith("light.") || safeEntity.startsWith("fan.") || safeEntity.startsWith("input_boolean.")) {

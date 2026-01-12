@@ -131,6 +131,16 @@ const render = (el, widget, { getColorStyle }) => {
     }
 };
 
+const getSafeImageId = (w) => {
+    const props = w.props || {};
+    const path = (props.path || "").replace(/^"|"$/g, '').trim();
+    if (!path) return `img_${w.id.replace(/-/g, "_")}`;
+
+    // Create ID based on path and size for deduplication
+    const safePath = path.replace(/[^a-zA-Z0-9]/g, "_").replace(/^_+|_+$/g, "").replace(/_+/g, "_");
+    return `img_${safePath}_${w.width}x${w.height}`;
+};
+
 const exportDoc = (w, context) => {
     const { lines, getCondProps, getConditionCheck } = context;
     const props = w.props || {};
@@ -139,7 +149,7 @@ const exportDoc = (w, context) => {
 
     if (!path) return;
 
-    const safeId = `img_${w.id.replace(/-/g, "_")}`;
+    const safeId = getSafeImageId(w);
     lines.push(`        // widget:image id:${w.id} type:image x:${w.x} y:${w.y} w:${w.width} h:${w.height} path:"${path}" invert:${invert} ${getCondProps(w)}`);
 
     const cond = getConditionCheck(w);
@@ -155,23 +165,39 @@ const exportDoc = (w, context) => {
 };
 
 const onExportComponents = (context) => {
-    const { lines, widgets } = context;
+    const { lines, widgets, profile } = context;
     const targets = widgets.filter(w => w.type === 'image');
 
     if (targets.length > 0) {
-        lines.push("image:");
+        const processed = new Set();
+        const imageLines = [];
+
         targets.forEach(w => {
             const props = w.props || {};
             const path = (props.path || "").replace(/^"|"$/g, '').trim();
             if (!path) return;
 
-            const safeId = `img_${w.id.replace(/-/g, "_")}`;
-            lines.push(`  - file: "${path}"`);
-            lines.push(`    id: ${safeId}`);
-            lines.push(`    type: TRANSPARENT_BINARY`); // Standard for e-ink
-            lines.push(`    dither: FLOYDSTEINBERG`);
+            const safeId = getSafeImageId(w);
+            if (processed.has(safeId)) return;
+            processed.add(safeId);
+
+            const isColor = profile.features?.lcd || (profile.name && (profile.name.includes("6-Color") || profile.name.includes("Color")));
+            const imgType = isColor ? "RGB565" : "TRANSPARENT_BINARY";
+
+            imageLines.push(`  - file: "${path}"`);
+            imageLines.push(`    id: ${safeId}`);
+            imageLines.push(`    type: ${imgType}`);
+            imageLines.push(`    resize: ${w.width}x${w.height}`);
+            if (!isColor) {
+                imageLines.push(`    dither: FLOYDSTEINBERG`);
+            }
         });
-        lines.push("");
+
+        if (imageLines.length > 0) {
+            lines.push("image:");
+            lines.push(...imageLines);
+            lines.push("");
+        }
     }
 };
 

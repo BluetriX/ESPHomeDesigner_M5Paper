@@ -205,14 +205,14 @@ export const DEVICE_PROFILES = {
     isPackageBased: true,
     hardwarePackage: "hardware/waveshare-esp32-s3-touch-lcd-7.yaml",
     resolution: { width: 800, height: 480 },
-    features: { psram: true, buzzer: false, buttons: false, lcd: true, lvgl: true }
+    features: { psram: true, buzzer: false, buttons: false, lcd: true, lvgl: true, touch: true }
   },
   waveshare_esp32_s3_touch_lcd_4_3: {
     name: "Waveshare Touch LCD 4.3 4.3\" 800x480",
     isPackageBased: true,
     hardwarePackage: "hardware/waveshare-esp32-s3-touch-lcd-4.3.yaml",
     resolution: { width: 800, height: 480 },
-    features: { psram: true, buzzer: false, buttons: false, lcd: true }
+    features: { psram: true, buzzer: false, buttons: false, lcd: true, touch: true }
   },
 
   // ========================================================================

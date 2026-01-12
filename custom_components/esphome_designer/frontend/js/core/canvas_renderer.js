@@ -152,8 +152,6 @@ export function render(canvasInstance) {
         canvasInstance.canvas.appendChild(artboardWrapper);
     });
 
-    // Re-add selection helpers if they existed
-    existingGuides.forEach((g) => canvasInstance.canvas.appendChild(g));
     if (existingLasso) canvasInstance.canvas.appendChild(existingLasso);
 }
 

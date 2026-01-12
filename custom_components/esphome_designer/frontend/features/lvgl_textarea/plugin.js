@@ -45,6 +45,24 @@ const render = (el, widget, { getColorStyle }) => {
     el.appendChild(cursor);
 };
 
+const exportLVGL = (w, context) => {
+    const { getStyleProps, getObjectDescriptor } = context;
+    const props = w.props || {};
+
+    const obj = getObjectDescriptor(w);
+    obj.type = "textarea";
+    obj.attrs = {
+        ...obj.attrs,
+        placeholder: props.placeholder,
+        text: props.text,
+        max_length: props.max_length,
+        one_line: props.one_line ?? false,
+        password_mode: props.password_mode ?? false
+    };
+
+    return obj;
+};
+
 export default {
     id: "lvgl_textarea",
     name: "Textarea",
@@ -54,5 +72,6 @@ export default {
         placeholder: "Enter text...",
         max_length: 128
     },
-    render
+    render,
+    exportLVGL
 };

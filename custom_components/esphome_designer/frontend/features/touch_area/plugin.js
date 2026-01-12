@@ -70,11 +70,82 @@ const render = (el, widget, { getColorStyle }) => {
                 el.appendChild(lbl);
             }
         } else {
-            el.innerText = props.title || "Touch Area";
+            el.innerText = props.title || widget.entity_id || "Touch Area";
         }
     } else {
         el.innerText = props.title || widget.entity_id || "Touch Area";
     }
+};
+
+const exportDoc = (w, context) => {
+    const {
+        lines, addFont, getColorConst, getCondProps, getConditionCheck
+    } = context;
+
+    const p = w.props || {};
+    const icon = (p.icon || "").replace("mdi:", "").toUpperCase();
+    const iconPressed = (p.icon_pressed || "").replace("mdi:", "").toUpperCase();
+    const iconSize = parseInt(p.icon_size || 40, 10);
+    const iconColorProp = p.icon_color || "black";
+    const iconColor = getColorConst(iconColorProp);
+
+    lines.push(`        // widget:touch_area id:${w.id} type:touch_area x:${w.x} y:${w.y} w:${w.width} h:${w.height} icon:"${p.icon || ""}" icon_pressed:"${p.icon_pressed || ""}" icon_size:${iconSize} icon_color:${iconColorProp} ${getCondProps(w)}`);
+
+    const cond = getConditionCheck(w);
+    if (cond) lines.push(`        ${cond}`);
+
+    if (icon) {
+        const fontRef = addFont("Material Design Icons", 400, iconSize);
+        const safeId = (w.entity_id || `touch_area_${w.id.replace(/-/g, "_")}`).replace(/[^a-zA-Z0-9_]/g, "_");
+
+        if (iconPressed) {
+            lines.push(`        if (id(${safeId}).state) {`);
+            lines.push(`          it.printf(${w.x} + ${w.width}/2, ${w.y} + ${w.height}/2, id(${fontRef}), ${iconColor}, TextAlign::CENTER, "\\\\U000${iconPressed}");`);
+            lines.push(`        } else {`);
+            lines.push(`          it.printf(${w.x} + ${w.width}/2, ${w.y} + ${w.height}/2, id(${fontRef}), ${iconColor}, TextAlign::CENTER, "\\\\U000${icon}");`);
+            lines.push(`        }`);
+        } else {
+            lines.push(`        it.printf(${w.x} + ${w.width}/2, ${w.y} + ${w.height}/2, id(${fontRef}), ${iconColor}, TextAlign::CENTER, "\\\\U000${icon}");`);
+        }
+    }
+
+    if (cond) lines.push(`        }`);
+};
+
+const onExportBinarySensors = (context) => {
+    const { lines, widgets, profile } = context;
+    if (!profile || (!profile.touch && !profile.features?.touch)) return;
+
+    const targets = widgets.filter(w => w.type === 'touch_area');
+    if (targets.length === 0) return;
+
+    lines.push("  # Touch Area Binary Sensors");
+    targets.forEach(w => {
+        const p = w.props || {};
+        const safeId = (w.entity_id || `touch_area_${w.id.replace(/-/g, "_")}`).replace(/[^a-zA-Z0-9_]/g, "_");
+
+        lines.push(`  - platform: touchscreen`);
+        lines.push(`    id: ${safeId}`);
+        lines.push(`    touchscreen_id: my_touchscreen`);
+        lines.push(`    x_min: ${w.x}`);
+        lines.push(`    x_max: ${w.x + w.width}`);
+        lines.push(`    y_min: ${w.y}`);
+        lines.push(`    y_max: ${w.y + w.height}`);
+
+        if (w.entity_id) {
+            lines.push(`    on_press:`);
+            lines.push(`      - homeassistant.service:`);
+            lines.push(`          service: homeassistant.toggle`);
+            lines.push(`          data:`);
+            lines.push(`            entity_id: ${w.entity_id}`);
+        }
+    });
+};
+
+const collectRequirements = (widget, { trackIcon }) => {
+    const props = widget.props || {};
+    if (props.icon) trackIcon(props.icon, props.icon_size || 40);
+    if (props.icon_pressed) trackIcon(props.icon_pressed, props.icon_size || 40);
 };
 
 export default {
@@ -86,10 +157,13 @@ export default {
         icon: "",
         icon_pressed: "",
         icon_size: 40,
-        icon_color: "",
+        icon_color: "black",
         color: "rgba(0, 0, 255, 0.15)",
         border_color: "#0000ff",
         on_click: ""
     },
-    render
+    render,
+    collectRequirements,
+    onExportBinarySensors,
+    export: exportDoc
 };

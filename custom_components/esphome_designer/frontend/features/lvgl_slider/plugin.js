@@ -94,7 +94,7 @@ const exportLVGL = (w, { common, convertColor, profile }) => {
         }
     };
 
-    if (w.entity_id && hasTouch) {
+    if (w.entity_id) {
         const safeEntity = w.entity_id.trim();
         let serviceCall;
         if (safeEntity.startsWith("light.")) {

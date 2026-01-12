@@ -203,7 +203,7 @@ export default {
     category: "Sensors",
     defaults: {
         entity_id: "",
-        title: "Sensor",
+        title: "",
         value_format: "label_value",
         label_font_size: 14,
         value_font_size: 20,
@@ -242,7 +242,21 @@ export default {
         }
 
         const format = p.value_format || "label_value";
-        const unit = p.unit || "";
+        let unit = (p.unit || "").trim();
+
+        // Auto-detect unit if missing and not suppressed
+        if (!unit && !p.hide_unit && !format.endsWith("_no_unit") && window.AppState && window.AppState.entityStates) {
+            const eObj = window.AppState.entityStates[entityId];
+            if (eObj) {
+                if (eObj.attributes && eObj.attributes.unit_of_measurement) {
+                    unit = eObj.attributes.unit_of_measurement;
+                } else if (eObj.formatted) {
+                    const match = eObj.formatted.match(/^([-+]?\d*[.,]?\d+)\s*(.*)$/);
+                    if (match && match[2]) unit = match[2].trim();
+                }
+            }
+        }
+
         const labelFS = p.label_font_size || 14;
         const valueFS = p.value_font_size || 20;
         const family = p.font_family || "Roboto";
@@ -285,7 +299,7 @@ export default {
         const valFmt = isText ? "%s" : `%.${precision}f`;
 
         // Format parts
-        let title = p.title || w.title || "";
+        let title = (w.title || p.title || "").trim();
         if (!title && (format.startsWith("label_"))) {
             title = entityId.split('.').pop().replace(/_/g, ' '); // Minimal fallback
         }

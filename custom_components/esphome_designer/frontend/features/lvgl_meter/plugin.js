@@ -126,6 +126,8 @@ export default {
     name: "Meter",
     category: "LVGL",
     defaults: {
+        width: 140,
+        height: 140,
         value: 0,
         min: 0,
         max: 100,

@@ -13,7 +13,8 @@ export class PluginRegistry {
             "circle": "shape_circle",
             "nav_next_page": "touch_area",
             "nav_previous_page": "touch_area",
-            "nav_reload_page": "touch_area"
+            "nav_reload_page": "touch_area",
+            "puppet": "online_image"
         };
     }
 

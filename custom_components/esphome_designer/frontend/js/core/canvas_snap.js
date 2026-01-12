@@ -1,23 +1,28 @@
 import { SNAP_DISTANCE } from './constants.js';
 import { AppState } from './state.js';
 
-export function clearSnapGuides(canvasInstance) {
-    const guides = canvasInstance.canvas.querySelectorAll(".snap-guide");
+export function clearSnapGuides() {
+    // Search the entire document to ensure all guides are removed
+    const guides = document.querySelectorAll(".snap-guide");
     guides.forEach((g) => g.remove());
 }
 
-export function addSnapGuideVertical(canvasInstance, x) {
+export function addSnapGuideVertical(canvasInstance, x, artboardEl) {
+    const parent = artboardEl || canvasInstance.canvas;
+    if (!parent || typeof parent.appendChild !== 'function') return;
     const guide = document.createElement("div");
     guide.className = "snap-guide snap-guide-vertical";
-    guide.style.left = `${x}px`;
-    canvasInstance.canvas.appendChild(guide);
+    guide.style.left = `${Math.round(x)}px`;
+    parent.appendChild(guide);
 }
 
-export function addSnapGuideHorizontal(canvasInstance, y) {
+export function addSnapGuideHorizontal(canvasInstance, y, artboardEl) {
+    const parent = artboardEl || canvasInstance.canvas;
+    if (!parent || typeof parent.appendChild !== 'function') return;
     const guide = document.createElement("div");
     guide.className = "snap-guide snap-guide-horizontal";
-    guide.style.top = `${y}px`;
-    canvasInstance.canvas.appendChild(guide);
+    guide.style.top = `${Math.round(y)}px`;
+    parent.appendChild(guide);
 }
 
 export function getSnapLines(excludeWidgetId, dims) {
@@ -45,9 +50,9 @@ export function getSnapLines(excludeWidgetId, dims) {
     return { vertical, horizontal };
 }
 
-export function applySnapToPosition(canvasInstance, widget, x, y, altKey, dims) {
+export function applySnapToPosition(canvasInstance, widget, x, y, altKey, dims, artboardEl) {
     if (!AppState.snapEnabled || altKey) {
-        clearSnapGuides(canvasInstance);
+        clearSnapGuides();
         return { x: Math.round(x), y: Math.round(y) };
     }
 
@@ -102,9 +107,9 @@ export function applySnapToPosition(canvasInstance, widget, x, y, altKey, dims) 
     snappedX = Math.max(0, Math.min(dims.width - w, snappedX));
     snappedY = Math.max(0, Math.min(dims.height - h, snappedY));
 
-    clearSnapGuides(canvasInstance);
-    if (snappedV != null) addSnapGuideVertical(canvasInstance, snappedV);
-    if (snappedH != null) addSnapGuideHorizontal(canvasInstance, snappedH);
+    clearSnapGuides();
+    if (snappedV != null) addSnapGuideVertical(canvasInstance, snappedV, artboardEl);
+    if (snappedH != null) addSnapGuideHorizontal(canvasInstance, snappedH, artboardEl);
 
     return {
         x: Math.round(snappedX),
