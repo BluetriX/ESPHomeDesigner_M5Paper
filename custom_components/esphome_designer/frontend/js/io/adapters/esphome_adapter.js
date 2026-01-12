@@ -121,7 +121,9 @@ export class ESPHomeAdapter extends BaseAdapter {
 
         // 1. Instructions & Setup Comments
         if (!profile.isPackageBased) {
-            lines.push(...this.yaml.generateInstructionHeader(profile, { pages, device_model: model }));
+            lines.push(...this.yaml.generateInstructionHeader(profile, layout));
+
+            lines.push("");
         }
 
         // 2. Preparation
@@ -174,7 +176,7 @@ export class ESPHomeAdapter extends BaseAdapter {
             }
 
             // 2. PSRAM
-            if (profile.features && (profile.features.psram || profile.features.features?.psram)) {
+            if (!profile.isPackageBased && profile.features && (profile.features.psram || profile.features.features?.psram)) {
                 lines.push("psram:", "  mode: octal", "  speed: 80MHz");
             }
 
@@ -322,11 +324,7 @@ export class ESPHomeAdapter extends BaseAdapter {
                 }
             }
 
-            // 5. Time (Home Assistant)
-            lines.push("time:");
-            lines.push("  - platform: homeassistant");
-            lines.push("    id: ha_time");
-            lines.push("");
+
 
             // Top-level Components (image, graph, etc.)
             const plugins = PluginRegistry.getAll();
@@ -399,7 +397,7 @@ export class ESPHomeAdapter extends BaseAdapter {
                 if (hasLvgl) {
                     packageContent = packageContent.replace(placeholderRegex, "");
                 } else {
-                    const replacement = (hasHeader ? "" : "lambda: |-\n") + lambdaContent.map(l => indent + "      " + l).join("\n");
+                    const replacement = (hasHeader ? "" : indent + "lambda: |-\n") + lambdaContent.map(l => indent + "  " + l).join("\n");
                     packageContent = packageContent.replace(placeholderRegex, replacement);
                 }
             }

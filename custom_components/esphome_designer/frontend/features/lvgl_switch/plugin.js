@@ -47,7 +47,7 @@ const exportLVGL = (w, { common, convertColor, formatOpacity, profile }) => {
     const switchObj = {
         switch: {
             ...common,
-            state: p.checked,
+            checked: p.checked,
             bg_color: convertColor(p.bg_color),
             indicator: { bg_color: convertColor(p.color) },
             knob: { bg_color: convertColor(p.knob_color) },

@@ -22,14 +22,13 @@ export class YamlGenerator {
 
         // Add brief device specs comment based on profile features
         const feats = profile.features || {};
-        const platform = profile.displayPlatform || (feats.lcd ? "LCD" : (feats.epaper ? "e-paper" : "Unknown"));
+        const platform = profile.displayPlatform || (feats.lcd ? (profile.id === 'reterminal_e1001' ? 'reterminal_e1001' : 'LCD') : (feats.epaper ? "waveshare_epaper" : "Unknown"));
         lines.push(`#         - Display Platform: ${platform}`);
         lines.push(`#         - PSRAM: ${feats.psram ? 'Yes' : 'No'}`);
         lines.push(`#         - Battery: ${profile.battery ? 'Yes' : 'No'}`);
         lines.push(`#         - Buttons: ${feats.buttons ? 'Yes' : 'No'}`);
         lines.push(`#         - Buzzer: ${feats.buzzer ? 'Yes' : 'No'}`);
         if (feats.audio) lines.push(`#         - Audio: Yes`);
-
         lines.push("# ============================================================================");
         lines.push("#");
         lines.push("# SETUP INSTRUCTIONS:");
@@ -42,28 +41,40 @@ export class YamlGenerator {
         lines.push("# STEP 2: Create a new device in ESPHome");
         lines.push("#         - Click \"New Device\"");
         lines.push("#         - Name: your-device-name");
-
-        const deviceModel = profile.id || "unknown";
-        if (deviceModel === "m5stack_coreink") {
-            lines.push("#         - Select: ESP32 (do NOT use S3!)");
-            lines.push("#         - Board: m5stack-coreink");
-            lines.push("#         - Framework: esp-idf (Recommended) or arduino");
-        } else if (deviceModel === "m5stack_paper") {
-            lines.push("#         - Select: ESP32 (do NOT use S3!)");
-            lines.push("#         - Board: m5stack-paper");
-            lines.push("#         - Framework: arduino (Required)");
-            lines.push("#         - Flash Size: 16MB");
-            lines.push("#         (TIP: If you see strapping pin warnings, you can add 'ignore_strapping_warning: true' to 'esphome:')");
-        } else if (deviceModel === "trmnl") {
-            lines.push("#         - Select: ESP32-S3");
-            lines.push("#         - Board: esp32-s3-devkitc-1");
-            lines.push("#         - Framework: esp-idf (Recommended) or arduino");
-        } else {
-            lines.push("#         - Select: ESP32-S3 (or appropriate for your board)");
-        }
-
+        lines.push("#         - Select: ESP32-S3 (or appropriate for your board)");
+        lines.push("#         - Board: esp32-s3-devkitc-1");
+        lines.push("#         - Framework: esp-idf");
+        lines.push("#           (TIP: For ESPHome 2025.12+, set version: 5.4.2 to avoid build errors)");
         lines.push("#");
         lines.push("# ============================================================================");
+        lines.push("");
+        lines.push("# ============================================================================");
+        lines.push("# STEP 3: Add the on_boot sequence");
+        lines.push("# Paste the following into your 'esphome:' section.");
+        lines.push("# (TIP: If compiling fails with 'OOM', add 'compile_process_limit: 1' to 'esphome:')");
+        lines.push("# ============================================================================");
+        lines.push("# esphome:");
+        lines.push("#   on_boot:");
+        lines.push("#     priority: 600");
+        lines.push("#     then:");
+        if (profile.battery) {
+            lines.push("#       - output.turn_on: bsp_battery_enable");
+        }
+        lines.push("#       - delay: 2s  # Wait for Home Assistant API connection");
+        lines.push("#       - script.execute: manage_run_and_sleep");
+        lines.push("#       - script.execute: auto_cycle_timer");
+        lines.push("#");
+        lines.push("");
+        lines.push("# ====================================");
+        lines.push("# Device Settings");
+        lines.push("# ====================================");
+        lines.push(`# Orientation: ${layout.orientation || "landscape"}`);
+        lines.push(`# Dark Mode: ${layout.darkMode ? "enabled" : "disabled"}`);
+        lines.push(`# Refresh Interval: ${layout.refreshInterval || 600}`);
+        const strategy = layout.deepSleepEnabled ? "Ultra Eco (Deep Sleep)" : (layout.sleepEnabled ? "Eco (Light Sleep)" : "Always On");
+        lines.push(`# Power Strategy: ${strategy}`);
+        lines.push(`# Deep Sleep Interval: ${layout.deepSleepInterval || 600}`);
+        lines.push("# ====================================");
         lines.push("");
         return lines;
     }

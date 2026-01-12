@@ -28,6 +28,8 @@ export const DEVICE_PROFILES = {
   // ========================================================================
   reterminal_e1001: {
     name: "Seeedstudio reTerminal E1001 (Monochrome)",
+    chip: "esp32-s3",
+    board: "esp32-s3-devkitc-1",
     displayModel: "7.50inv2p",
     displayPlatform: "waveshare_epaper",
     resolution: { width: 800, height: 480 },
