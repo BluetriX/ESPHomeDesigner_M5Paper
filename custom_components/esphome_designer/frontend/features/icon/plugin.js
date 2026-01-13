@@ -39,7 +39,9 @@ export default {
     category: "Core",
     defaults: {
         code: "F07D0",
-        size: 40,
+        width: 60,
+        height: 60,
+        size: 48,
         color: "black",
         font_ref: "font_mdi_medium",
         fit_icon_to_frame: true

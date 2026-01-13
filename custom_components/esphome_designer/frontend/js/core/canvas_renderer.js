@@ -306,7 +306,7 @@ export function focusPage(canvasInstance, index, smooth = true) {
     }
 }
 
-export function updateWidgetDOM(canvasInstance, widget) {
+export function updateWidgetDOM(canvasInstance, widget, skipPluginRender = false) {
     if (!widget || !widget.id) return;
     const el = canvasInstance.canvas.querySelector(`.widget[data-id="${widget.id}"]`);
     if (el) {
@@ -318,7 +318,7 @@ export function updateWidgetDOM(canvasInstance, widget) {
         // Re-render plugin logic for real-time updates (e.g. font-size in icons)
         const type = (widget.type || "").toLowerCase();
         const feature = FeatureRegistry ? FeatureRegistry.get(type) : null;
-        if (feature && feature.render) {
+        if (!skipPluginRender && feature && feature.render) {
             try {
                 const wrappedGetColorStyle = (color) => {
                     const pageTheme = getEffectiveDarkMode() ? 'dark' : 'light';

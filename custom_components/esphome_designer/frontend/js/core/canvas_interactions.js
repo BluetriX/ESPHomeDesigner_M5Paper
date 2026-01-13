@@ -173,7 +173,9 @@ export function setupInteractions(canvasInstance) {
                     startY: ev.clientY,
                     startW: widget.width,
                     startH: widget.height,
-                    artboardEl: currentArtboardEl // Store for coordinate calc
+                    artboardEl: currentArtboardEl,
+                    dragStartPanX: canvasInstance.panX,
+                    dragStartPanY: canvasInstance.panY
                 };
             } else {
                 if (widget.locked) return;
@@ -193,7 +195,9 @@ export function setupInteractions(canvasInstance) {
                     widgets: widgetOffsets,
                     artboardEl: currentArtboardEl,
                     dragStartX: ev.clientX,
-                    dragStartY: ev.clientY
+                    dragStartY: ev.clientY,
+                    dragStartPanX: canvasInstance.panX,
+                    dragStartPanY: canvasInstance.panY
                 };
             }
 
@@ -244,9 +248,10 @@ export function onMouseMove(ev, canvasInstance) {
             const currentArtboardEl = document.querySelector(`.artboard[data-index="${AppState.currentPageIndex}"]`);
             if (!currentArtboardEl) return;
 
-            // Delta-based calculation
-            const mouseDx = (ev.clientX - canvasInstance.dragState.dragStartX) / zoom;
-            const mouseDy = (ev.clientY - canvasInstance.dragState.dragStartY) / zoom;
+            // Delta-based calculation with Pan Compensation
+            // This ensures the widget stays glued to the cursor even if the camera pans (focusPage)
+            const mouseDx = (ev.clientX - canvasInstance.dragState.dragStartX) / zoom + (canvasInstance.dragState.dragStartPanX - canvasInstance.panX) / zoom;
+            const mouseDy = (ev.clientY - canvasInstance.dragState.dragStartY) / zoom + (canvasInstance.dragState.dragStartPanY - canvasInstance.panY) / zoom;
 
             const primaryWidget = AppState.getWidgetById(canvasInstance.dragState.id);
             if (!primaryWidget) return;
@@ -285,15 +290,25 @@ export function onMouseMove(ev, canvasInstance) {
                 if (widget && !widget.locked) {
                     widget.x = wInfo.startX + dx;
                     widget.y = wInfo.startY + dy;
-                    updateWidgetDOM(canvasInstance, widget);
+                    updateWidgetDOM(canvasInstance, widget, true);
                 }
             }
         } else if (canvasInstance.dragState.mode === "resize") {
             const widget = AppState.getWidgetById(canvasInstance.dragState.id);
             if (!widget) return;
 
-            let w = canvasInstance.dragState.startW + (ev.clientX - canvasInstance.dragState.startX) / zoom;
-            let h = canvasInstance.dragState.startH + (ev.clientY - canvasInstance.dragState.startY) / zoom;
+            const panDx = (canvasInstance.dragState.dragStartPanX - canvasInstance.panX) / zoom;
+            const panDy = (canvasInstance.dragState.dragStartPanY - canvasInstance.panY) / zoom;
+
+            let w = canvasInstance.dragState.startW + (ev.clientX - canvasInstance.dragState.startX) / zoom + panDx;
+            let h = canvasInstance.dragState.startH + (ev.clientY - canvasInstance.dragState.startY) / zoom + panDy;
+
+            // NaN Safety and Minimum Clamping
+            if (isNaN(w)) w = canvasInstance.dragState.startW;
+            if (isNaN(h)) h = canvasInstance.dragState.startH;
+
+            w = Math.max(1, w);
+            h = Math.max(1, h);
 
             const wtype = (widget.type || "").toLowerCase();
 
@@ -393,9 +408,22 @@ export function onMouseUp(ev, canvasInstance) {
             if (targetPageIndex !== -1 && targetPageIndex !== AppState.currentPageIndex) {
                 const widgetInfo = canvasInstance.dragState.widgets.find(w => w.id === widgetId);
                 if (widgetInfo) {
-                    // Cache values before nullifying listeners
-                    const startX = widgetInfo.startX;
-                    const startY = widgetInfo.startY;
+                    let dropX = widgetInfo.startX;
+                    let dropY = widgetInfo.startY;
+
+                    // If dropped onto a specific artboard, calculate position relative to that artboard
+                    if (targetArtboard) {
+                        const targetRect = targetArtboard.getBoundingClientRect();
+                        const zoom = AppState.zoomLevel;
+
+                        // Use mouse position relative to target artboard, applying the original click offset
+                        dropX = Math.round((ev.clientX - targetRect.left) / zoom - widgetInfo.clickOffsetX);
+                        dropY = Math.round((ev.clientY - targetRect.top) / zoom - widgetInfo.clickOffsetY);
+
+                        // Safety clamp: ensure widget doesn't end up at extreme coordinates
+                        dropX = Math.max(0, dropX);
+                        dropY = Math.max(0, dropY);
+                    }
 
                     // Clean up BEFORE state change to avoid duplicate events or stale listeners
                     window.removeEventListener("mousemove", canvasInstance._boundMouseMove);
@@ -403,9 +431,9 @@ export function onMouseUp(ev, canvasInstance) {
                     canvasInstance.dragState = null;
                     clearSnapGuides();
 
-                    const success = AppState.moveWidgetToPage(widgetId, targetPageIndex, startX, startY);
+                    const success = AppState.moveWidgetToPage(widgetId, targetPageIndex, dropX, dropY);
                     if (success) {
-                        Logger.log(`[Canvas] Moved widget ${widgetId} to page ${targetPageIndex} (preserved position)`);
+                        Logger.log(`[Canvas] Moved widget ${widgetId} to page ${targetPageIndex} at (${dropX}, ${dropY})`);
                         render(canvasInstance);
                         return;
                     }

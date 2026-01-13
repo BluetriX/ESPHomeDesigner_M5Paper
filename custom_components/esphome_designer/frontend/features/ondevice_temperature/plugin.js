@@ -6,8 +6,8 @@ const render = (el, widget, { getColorStyle }) => {
     const props = widget.props || {};
     const color = props.color || "black";
     let iconSize = props.size || 32;
-    const fontSize = props.font_size || 16;
-    const labelFontSize = props.label_font_size || 12;
+    let fontSize = props.font_size || 16;
+    let labelFontSize = props.label_font_size || 12;
     const unit = props.unit || "°C";
     const showLabel = props.show_label !== false;
     const precision = props.precision ?? 1;
@@ -15,9 +15,17 @@ const render = (el, widget, { getColorStyle }) => {
     let temperature = 22.5; // Default preview value
 
     if (props.fit_icon_to_frame) {
-        const padding = 4;
-        const maxDim = Math.max(8, Math.min((widget.width || 0) - padding * 2, (widget.height || 0) - padding * 2));
-        iconSize = Math.round(maxDim);
+        const padding = 2;
+        const h = (widget.height || 60) - padding * 2;
+
+        iconSize = Math.round(h * 0.45);
+        fontSize = Math.round(h * 0.25);
+        labelFontSize = Math.round(h * 0.15);
+
+        // Bound checks
+        iconSize = Math.max(8, iconSize);
+        fontSize = Math.max(8, fontSize);
+        labelFontSize = Math.max(6, labelFontSize);
     }
 
     if (!props.is_local_sensor && widget.entity_id) {
@@ -85,6 +93,8 @@ export default {
     name: "Temperature",
     category: "SHT4x",
     defaults: {
+        width: 60,
+        height: 60,
         size: 32,
         font_size: 16,
         label_font_size: 10,

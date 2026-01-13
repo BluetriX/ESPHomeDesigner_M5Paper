@@ -16,7 +16,7 @@ export const COLORS = {
 
 export const UI_DEFAULTS = {
     GRID_SIZE: 10,
-    SNAP_THRESHOLD: 5,
+    SNAP_THRESHOLD: 10,
     SIDEBAR_WIDTH: 300,
     PROPERTIES_WIDTH: 350
 };
@@ -99,7 +99,7 @@ export const ESPHOME_COLOR_MAPPING = {
 export const DEFAULT_CANVAS_WIDTH = 800;
 export const DEFAULT_CANVAS_HEIGHT = 480;
 
-export const SNAP_DISTANCE = 5;
+export const SNAP_DISTANCE = 10;
 export const GRID_SIZE = 10;
 
 // Initialize global namespace

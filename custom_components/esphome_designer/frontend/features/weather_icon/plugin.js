@@ -157,7 +157,9 @@ export default {
     name: "Weather Icon",
     category: "Sensors",
     defaults: {
-        size: 40,
+        width: 60,
+        height: 60,
+        size: 48,
         color: "black",
         fit_icon_to_frame: true
     },

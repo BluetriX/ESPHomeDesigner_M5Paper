@@ -118,8 +118,10 @@ export default {
     name: "Battery",
     category: "Sensors",
     defaults: {
-        size: 24,
-        font_size: 12,
+        width: 60,
+        height: 60,
+        size: 36,
+        font_size: 14,
         color: "black"
     },
     render,
