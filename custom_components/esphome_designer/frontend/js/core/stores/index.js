@@ -57,8 +57,8 @@ class AppStateFacade {
     }
 
     getPagesPayload() {
-        return this.project.getPagesPayload ? this.project.getPagesPayload() : {
-            pages: this.project.pages,
+        return {
+            ...this.project.getPagesPayload(),
             ...this.settings
         };
     }
@@ -104,6 +104,12 @@ class AppStateFacade {
     reorderPage(fromIndex, toIndex) {
         this.project.reorderPage(fromIndex, toIndex);
         this.recordHistory();
+    }
+
+    addPage(atIndex = null) {
+        const page = this.project.addPage(atIndex);
+        this.recordHistory();
+        return page;
     }
 
     deletePage(index) {

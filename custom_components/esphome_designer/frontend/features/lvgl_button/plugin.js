@@ -24,7 +24,9 @@ const render = (el, widget, { getColorStyle }) => {
 
 const exportLVGL = (w, { common, convertColor, formatOpacity, profile }) => {
     const p = w.props || {};
-    const hasTouch = profile?.touch;
+
+    // Robust entity ID detection: check top-level, props.entity_id, and props.entity
+    const entityId = (w.entity_id || p.entity_id || p.entity || "").trim();
 
     const btnObj = {
         button: {
@@ -48,19 +50,19 @@ const exportLVGL = (w, { common, convertColor, formatOpacity, profile }) => {
         }
     };
 
-    if (w.entity_id) {
-        const safeEntity = w.entity_id.trim();
+    if (entityId) {
         let action = [];
-        if (safeEntity.startsWith("switch.") || safeEntity.startsWith("light.") || safeEntity.startsWith("fan.") || safeEntity.startsWith("input_boolean.")) {
-            action = [{ "homeassistant.service": { service: "homeassistant.toggle", data: { entity_id: safeEntity } } }];
-        } else if (safeEntity.startsWith("script.")) {
-            action = [{ "script.execute": safeEntity }];
-        } else if (safeEntity.startsWith("button.") || safeEntity.startsWith("input_button.")) {
-            action = [{ "button.press": safeEntity }];
-        } else if (safeEntity.startsWith("scene.")) {
-            action = [{ "scene.turn_on": safeEntity }];
+        if (entityId.startsWith("switch.") || entityId.startsWith("light.") || entityId.startsWith("fan.") || entityId.startsWith("input_boolean.")) {
+            action = [{ "homeassistant.service": { service: "homeassistant.toggle", data: { entity_id: entityId } } }];
+        } else if (entityId.startsWith("script.")) {
+            action = [{ "script.execute": entityId }];
+        } else if (entityId.startsWith("button.") || entityId.startsWith("input_button.")) {
+            action = [{ "button.press": entityId }];
+        } else if (entityId.startsWith("scene.")) {
+            action = [{ "scene.turn_on": entityId }];
         } else {
-            action = [{ "homeassistant.service": { service: "homeassistant.toggle", data: { entity_id: safeEntity } } }];
+            // Default to toggle for unknown domains if it looks like an entity ID
+            action = [{ "homeassistant.service": { service: "homeassistant.toggle", data: { entity_id: entityId } } }];
         }
         btnObj.button.on_click = action;
     }

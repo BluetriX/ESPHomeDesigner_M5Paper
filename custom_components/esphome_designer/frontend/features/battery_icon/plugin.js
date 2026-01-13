@@ -123,6 +123,106 @@ export default {
         color: "black"
     },
     render,
-    export: exportDoc
+    exportLVGL: (w, { common, convertColor, getLVGLFont, formatOpacity }) => {
+        const p = w.props || {};
+        const entityId = (w.entity_id || "").trim();
+        const sensorId = p.is_local_sensor ? "battery_level" : (entityId ? entityId.replace(/[^a-zA-Z0-9_]/g, "_") : "battery_level");
+        const color = convertColor(p.color || "black");
+        const iconSize = parseInt(p.size || 24, 10);
+        const fontSize = parseInt(p.font_size || 12, 10);
+
+        let iconLambda = '!lambda |-\n';
+        iconLambda += `          if (id(${sensorId}).has_state()) {\n`;
+        iconLambda += `            float lvl = id(${sensorId}).state;\n`;
+        iconLambda += `            if (lvl >= 95) return "\\U000F0079";\n`;
+        iconLambda += `            if (lvl >= 85) return "\\U000F0082";\n`;
+        iconLambda += `            if (lvl >= 75) return "\\U000F0081";\n`;
+        iconLambda += `            if (lvl >= 65) return "\\U000F0080";\n`;
+        iconLambda += `            if (lvl >= 55) return "\\U000F007F";\n`;
+        iconLambda += `            if (lvl >= 45) return "\\U000F007E";\n`;
+        iconLambda += `            if (lvl >= 35) return "\\U000F007D";\n`;
+        iconLambda += `            if (lvl >= 25) return "\\U000F007C";\n`;
+        iconLambda += `            if (lvl >= 15) return "\\U000F007B";\n`;
+        iconLambda += `            if (lvl >= 5) return "\\U000F007A";\n`;
+        iconLambda += `            return "\\U000F0083";\n`;
+        iconLambda += '          }\n';
+        iconLambda += '          return "\\U000F0083";';
+
+        let textLambda = '!lambda |-\n';
+        textLambda += `          if (id(${sensorId}).has_state()) {\n`;
+        textLambda += `            return str_sprintf("%.0f%%", id(${sensorId}).state).c_str();\n`;
+        textLambda += '          }\n';
+        textLambda += '          return "---%";';
+
+        return {
+            obj: {
+                ...common,
+                bg_opa: "TRANSP",
+                border_width: 0,
+                widgets: [
+                    {
+                        label: {
+                            width: iconSize + 10,
+                            height: iconSize + 4,
+                            align: "TOP_MID",
+                            text: iconLambda,
+                            text_font: getLVGLFont("Material Design Icons", iconSize, 400),
+                            text_color: color
+                        }
+                    },
+                    {
+                        label: {
+                            width: "100%",
+                            height: fontSize + 4,
+                            align: "BOTTOM_MID",
+                            y: 2,
+                            text: textLambda,
+                            text_font: getLVGLFont("Roboto", fontSize, 400),
+                            text_color: color,
+                            text_align: "CENTER"
+                        }
+                    }
+                ]
+            }
+        };
+    },
+    collectRequirements: (w, context) => {
+        const { trackIcon, addFont } = context;
+        const p = w.props || {};
+        const size = parseInt(p.size || 24, 10);
+        const fontSize = parseInt(p.font_size || 12, 10);
+
+        addFont("Material Design Icons", 400, size);
+        addFont("Roboto", 400, fontSize);
+
+        ["F0079", "F0082", "F0081", "F0080", "F007F", "F007E", "F007D", "F007C", "F007B", "F007A", "F0083"].forEach(c => trackIcon(c, size));
+    },
+    export: exportDoc,
+    onExportNumericSensors: (context) => {
+        const { lines, widgets } = context;
+        if (!widgets) return;
+
+        const processed = new Set();
+        for (const w of widgets) {
+            if (w.type !== "battery_icon") continue;
+
+            const p = w.props || {};
+            if (p.is_local_sensor) continue;
+
+            let eid = (w.entity_id || "").trim();
+            if (!eid) continue;
+
+            // Ensure sensor. prefix if missing
+            if (!eid.includes(".")) {
+                eid = `sensor.${eid}`;
+            }
+
+            if (!processed.has(eid)) {
+                processed.add(eid);
+                const safeId = eid.replace(/[^a-zA-Z0-9_]/g, "_");
+                lines.push("- platform: homeassistant", `  id: ${safeId}`, `  entity_id: ${eid}`, "  internal: true");
+            }
+        }
+    }
 };
 

@@ -43,7 +43,10 @@ const render = (el, widget, { getColorStyle }) => {
 
 const exportLVGL = (w, { common, convertColor, formatOpacity, profile }) => {
     const p = w.props || {};
-    const hasTouch = profile?.touch;
+
+    // Robust entity ID detection
+    const entityId = (w.entity_id || p.entity_id || p.entity || "").trim();
+
     const switchObj = {
         switch: {
             ...common,
@@ -55,8 +58,8 @@ const exportLVGL = (w, { common, convertColor, formatOpacity, profile }) => {
             on_value: undefined
         }
     };
-    if (w.entity_id) {
-        switchObj.switch.on_value = [{ "homeassistant.service": { service: "homeassistant.toggle", data: { entity_id: w.entity_id } } }];
+    if (entityId) {
+        switchObj.switch.on_value = [{ "homeassistant.service": { service: "homeassistant.toggle", data: { entity_id: entityId } } }];
     }
     return switchObj;
 };

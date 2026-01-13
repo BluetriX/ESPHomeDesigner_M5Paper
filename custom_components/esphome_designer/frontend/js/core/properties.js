@@ -12,6 +12,8 @@ export class PropertiesPanel {
     constructor() {
         this.panel = document.getElementById("propertiesPanel");
         this.lastRenderedWidgetId = null; // Track which widget was last rendered
+        this.containerStack = []; // Stack for nested sections
+        this.sectionStates = {}; // TRACKER: Persistent state for expanded/collapsed sections
         this.init();
     }
 
@@ -70,9 +72,13 @@ export class PropertiesPanel {
             // Robustly check for focus within the panel
             const active = document.activeElement;
             if (active && this.panel.contains(active)) {
-                // Return if user is typing in an input/textarea
+                // Return if user is typing in an input/textarea OR interacting with a select/checkbox
                 const tag = active.tagName.toLowerCase();
-                if (tag === "input" || tag === "textarea") {
+                const type = active.type ? active.type.toLowerCase() : "";
+
+                if (tag === "input" || tag === "textarea" || tag === "select") {
+                    // Don't re-render while user is interacting with form elements
+                    // EXCEPT for range/checkbox if they want instant feedback (usually we do, but here it breaks focus)
                     return;
                 }
             }
@@ -131,10 +137,19 @@ export class PropertiesPanel {
 
 
         const type = (widget.type || "").toLowerCase();
+
+        // Pretty title for the header
+        let displayType = type;
+        if (type === "nav_next_page") displayType = "next page";
+        else if (type === "nav_previous_page") displayType = "previous page";
+        else if (type === "nav_reload_page") displayType = "reload page";
+        else displayType = type.replace(/_/g, " ");
+
         const title = document.createElement("div");
         title.className = "sidebar-section-label";
         title.style.marginTop = "0";
-        title.textContent = `${type} Properties`;
+        title.style.textTransform = "capitalize";
+        title.textContent = `${displayType} Properties`;
         this.panel.appendChild(title);
 
         // Lock Toggle state is already updated above in the general selection handling
@@ -152,7 +167,7 @@ export class PropertiesPanel {
         }
 
         // === COMMON PROPERTIES ===
-        this.createSection("Transform");
+        this.createSection("Transform", false); // Default to COLLAPSED for Transform per user feedback
         // this.addSectionLabel("Position & Size"); // Redundant with section title
         this.addLabeledInput("Position X", "number", widget.x, (v) => {
             AppState.updateWidget(widget.id, { x: parseInt(v, 10) || 0 });
@@ -195,15 +210,21 @@ export class PropertiesPanel {
     }
 
     createSection(title, defaultExpanded = true) {
+        // Use stored state if it exists, otherwise use default
+        const isCollapsed = this.sectionStates[title] !== undefined ?
+            this.sectionStates[title] === false :
+            !defaultExpanded;
+
         const section = document.createElement("div");
-        section.className = "properties-section" + (defaultExpanded ? "" : " collapsed");
+        section.className = "properties-section" + (isCollapsed ? " collapsed" : "");
 
         const header = document.createElement("div");
         header.className = "properties-section-header";
         header.innerHTML = `<span>${title}</span><span class="icon mdi mdi-chevron-down"></span>`;
         header.onclick = (e) => {
             e.stopPropagation();
-            section.classList.toggle("collapsed");
+            const nowCollapsed = section.classList.toggle("collapsed");
+            this.sectionStates[title] = !nowCollapsed; // Save state
         };
 
         const content = document.createElement("div");
@@ -211,6 +232,11 @@ export class PropertiesPanel {
 
         section.appendChild(header);
         section.appendChild(content);
+
+        // Update initial state in tracker if not set
+        if (this.sectionStates[title] === undefined) {
+            this.sectionStates[title] = !isCollapsed;
+        }
 
         // Append to current container
         this.getContainer().appendChild(section);
@@ -238,7 +264,33 @@ export class PropertiesPanel {
      */
     renderGridCellProperties(widget, type) {
         const page = AppState.getCurrentPage();
-        if (!page || !page.layout) return;  // Only show if page has grid layout
+        const layout = page?.layout || "absolute";
+        const isGrid = layout !== "absolute";
+
+        if (!page) return;
+
+        // If not in grid mode, show an "Enable Grid" prompt
+        if (!isGrid) {
+            const container = this.getContainer();
+            const msg = document.createElement("div");
+            msg.style.padding = "8px 0";
+            msg.style.fontSize = "11px";
+            msg.style.color = "var(--muted)";
+            msg.textContent = "Page is currently in Absolute Positioning mode.";
+            container.appendChild(msg);
+
+            const enableBtn = document.createElement("button");
+            enableBtn.className = "btn btn-secondary btn-xs";
+            enableBtn.style.width = "100%";
+            enableBtn.innerHTML = `<span class="mdi mdi-grid"></span> Enable Page Grid Layout`;
+            enableBtn.onclick = () => {
+                if (window.app && window.app.pageSettings) {
+                    window.app.pageSettings.open(AppState.currentPageIndex);
+                }
+            };
+            container.appendChild(enableBtn);
+            return;
+        }
 
         const isLvgl = WidgetFactory.isLvglWidget(type);
         const props = widget.props || {};
@@ -940,7 +992,7 @@ export class PropertiesPanel {
             this.addColorSelector("Foreground Color", props.color || "white", colors, (v) => updateProp("color", v));
             this.endSection();
         }
-        else if (type === "touch_area") {
+        else if (type === "touch_area" || type === "nav_next_page" || type === "nav_previous_page" || type === "nav_reload_page") {
             this.createSection("Action", true);
             // Navigation Action dropdown
             this.addSelect("Navigation Action", props.nav_action || "none", [

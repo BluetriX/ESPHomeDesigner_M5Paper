@@ -38,7 +38,6 @@ const exportLVGL = (w, { common, convertColor, convertAlign, getLVGLFont, format
             ...common,
             text: `"${p.text || 'Text'}"`,
             text_font: getLVGLFont(p.font_family, p.font_size, p.font_weight, p.italic),
-            text_font: getLVGLFont(p.font_family, p.font_size, p.font_weight, p.italic),
             text_color: convertColor(p.color || p.text_color),
             text_align: (convertAlign(p.text_align) || "LEFT").replace("TOP_", "").replace("BOTTOM_", ""),
             bg_color: p.bg_color === "transparent" ? undefined : convertColor(p.bg_color),

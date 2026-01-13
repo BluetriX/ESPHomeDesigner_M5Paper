@@ -1,4 +1,7 @@
 import { Logger } from '../utils/logger.js';
+const pluginModules = (typeof import.meta.glob === 'function')
+    ? import.meta.glob('../../features/*/plugin.js')
+    : {};
 
 export class PluginRegistry {
     constructor() {
@@ -63,15 +66,22 @@ export class PluginRegistry {
         // 3. Perform dynamic import
         const loadPromise = (async () => {
             try {
-                // Determine the path. 
-                // In production/HACS, it's relative to the frontend root.
-                const modulePath = `../../features/${targetId}/plugin.js`;
-                const module = await import(modulePath);
+                // Use import.meta.glob for better Vite compatibility
+                const path = `../../features/${targetId}/plugin.js`;
+
+                let module;
+                if (pluginModules[path]) {
+                    // Vite-native glob loading
+                    module = await pluginModules[path]();
+                } else {
+                    // Fallback for non-Vite environments (e.g. HA serving source)
+                    Logger.log(`[Registry] Using dynamic import fallback for: ${targetId}`);
+                    module = await import(path);
+                }
 
                 if (module.default) {
                     this.register(module.default);
                 } else {
-                    // Fallback for non-default exports if we use named
                     this.register({ id: targetId, ...module });
                 }
 

@@ -55,6 +55,8 @@ export const DEFAULT_PREFERENCES = {
     refreshInterval: 600,
     manualRefreshOnly: false,
     darkMode: false,
+    invertedColors: false,
+    lcdEcoStrategy: "backlight_off",
     sleepEnabled: false,
     sleepStartHour: 0,
     sleepEndHour: 5,

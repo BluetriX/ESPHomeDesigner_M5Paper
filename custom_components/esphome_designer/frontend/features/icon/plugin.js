@@ -51,6 +51,22 @@ export default {
         }
     },
     render,
+    exportLVGL: (w, { common, convertColor, getLVGLFont }) => {
+        const p = w.props || {};
+        const code = (p.code || "F0595").replace(/^0x/i, "");
+        const size = parseInt(p.size || 48, 10);
+        const color = convertColor(p.color || "black");
+
+        return {
+            label: {
+                ...common,
+                text: `"\\U000${code}"`,
+                text_font: getLVGLFont("Material Design Icons", size, 400),
+                text_color: color,
+                text_align: "CENTER"
+            }
+        };
+    },
     export: (w, context) => {
         const {
             lines, addFont, getColorConst, addDitherMask, getCondProps, getConditionCheck, isEpaper

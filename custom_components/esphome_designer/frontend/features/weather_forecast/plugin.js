@@ -174,7 +174,7 @@ const exportDoc = (w, context) => {
         lines.push(`          {`);
         lines.push(`            int dx = ${dayX}; int dy = ${dayY};`);
         lines.push(`            it.printf(dx + ${centerOffset}, dy, id(${dayFontId}), ${color}, TextAlign::TOP_CENTER, "%s", get_day_name(${day}).c_str());`);
-        lines.push(`            std::string cond_day = id(${condSensorId}).state;`);
+        lines.push(`            std::string cond_day = id(${condSensorId}).state.c_str();`);
         lines.push(`            it.printf(dx + ${centerOffset}, dy + ${dayFontSize + 4}, id(${iconFontId}), ${color}, TextAlign::TOP_CENTER, "%s", get_icon(cond_day));`);
         if (showHighLow) {
             lines.push(`            float high = id(${highSensorId}).state; float low = id(${lowSensorId}).state;`);
@@ -196,16 +196,16 @@ const onExportNumericSensors = (context) => {
 
     if (hasWeather) {
         lines.push("");
-        lines.push("  # Weather Forecast High/Low Sensors");
+        lines.push("# Weather Forecast High/Low Sensors");
         for (let day = 0; day < 5; day++) {
-            lines.push(`  - platform: homeassistant`);
-            lines.push(`    id: weather_high_day${day}`);
-            lines.push(`    entity_id: sensor.weather_forecast_day_${day}_high`);
-            lines.push(`    internal: true`);
-            lines.push(`  - platform: homeassistant`);
-            lines.push(`    id: weather_low_day${day}`);
-            lines.push(`    entity_id: sensor.weather_forecast_day_${day}_low`);
-            lines.push(`    internal: true`);
+            lines.push("- platform: homeassistant");
+            lines.push(`  id: weather_high_day${day}`);
+            lines.push(`  entity_id: sensor.weather_forecast_day_${day}_high`);
+            lines.push(`  internal: true`);
+            lines.push("- platform: homeassistant");
+            lines.push(`  id: weather_low_day${day}`);
+            lines.push(`  entity_id: sensor.weather_forecast_day_${day}_low`);
+            lines.push(`  internal: true`);
         }
     }
 };
@@ -218,12 +218,12 @@ const onExportTextSensors = (context) => {
     const weatherEntity = targets[0].entity_id || targets[0].props?.weather_entity || "weather.forecast_home";
 
     lines.push("");
-    lines.push("  # Weather Forecast Condition Sensors");
+    lines.push("# Weather Forecast Condition Sensors");
     for (let day = 0; day < 5; day++) {
-        lines.push(`  - platform: homeassistant`);
-        lines.push(`    id: weather_cond_day${day}`);
-        lines.push(`    entity_id: sensor.weather_forecast_day_${day}_condition`);
-        lines.push(`    internal: true`);
+        lines.push("- platform: homeassistant");
+        lines.push(`  id: weather_cond_day${day}`);
+        lines.push(`  entity_id: sensor.weather_forecast_day_${day}_condition`);
+        lines.push(`  internal: true`);
     }
 
     lines.push("");
@@ -263,6 +263,20 @@ const onExportTextSensors = (context) => {
     lines.push("# ============================================================================");
 };
 
+const collectRequirements = (w, { trackIcon, addFont }) => {
+    const p = w.props || {};
+    const iconSize = parseInt(p.icon_size || 32, 10);
+    const dayFS = parseInt(p.day_font_size || 12, 10);
+    const tempFS = parseInt(p.temp_font_size || 14, 10);
+    const family = p.font_family || "Roboto";
+
+    addFont(family, 700, dayFS);
+    addFont(family, 400, tempFS);
+    addFont("Material Design Icons", 400, iconSize);
+
+    ["F0594", "F0590", "F0026", "F0591", "F0592", "F0593", "F067E", "F0595", "F0596", "F0597", "F0598", "F067F", "F0599", "F059D", "F059E"].forEach(c => trackIcon(c, iconSize));
+};
+
 export default {
     id: "weather_forecast",
     name: "Weather Forecast",
@@ -284,8 +298,105 @@ export default {
         height: 90
     },
     render,
+    exportLVGL: (w, { common, convertColor, getLVGLFont }) => {
+        const p = w.props || {};
+        const days = 5;
+        const isHorizontal = (p.layout || "horizontal") === "horizontal";
+        const color = convertColor(p.color || "black");
+        const dayFS = parseInt(p.day_font_size || 12, 10);
+        const iconS = parseInt(p.icon_size || 32, 10);
+        const tempFS = parseInt(p.temp_font_size || 14, 10);
+        const showHighLow = p.show_high_low !== false;
+
+        const widgets = [];
+
+        for (let i = 0; i < days; i++) {
+            // Unrolling helper logic directly into lambdas to avoid scope issues
+            const dayNameLambda = `!lambda |-
+              if (${i} == 0) return "Today";
+              auto t = id(ha_time).now();
+              if (!t.is_valid()) return "---";
+              ESPTime future = ESPTime::from_epoch_local(t.timestamp + (${i} * 86400));
+              static char buf[16];
+              future.strftime(buf, sizeof(buf), "%a");
+              return buf;
+            `;
+
+            const iconLambda = `!lambda |-
+              std::string c = id(weather_cond_day${i}).state;
+              if (c == "clear-night") return "\\U000F0594";
+              if (c == "cloudy") return "\\U000F0590";
+              if (c == "exceptional") return "\\U000F0026";
+              if (c == "fog") return "\\U000F0591";
+              if (c == "hail") return "\\U000F0592";
+              if (c == "lightning") return "\\U000F0593";
+              if (c == "lightning-rainy") return "\\U000F067E";
+              if (c == "partlycloudy") return "\\U000F0595";
+              if (c == "pouring") return "\\U000F0596";
+              if (c == "rainy") return "\\U000F0597";
+              if (c == "snowy") return "\\U000F0598";
+              if (c == "snowy-rainy") return "\\U000F067F";
+              if (c == "sunny") return "\\U000F0599";
+              if (c == "windy") return "\\U000F059D";
+              if (c == "windy-variant") return "\\U000F059E";
+              return "\\U000F0590";
+            `;
+
+            const dayWidgets = [
+                {
+                    label: {
+                        align: "TOP_MID",
+                        text: dayNameLambda,
+                        text_font: getLVGLFont(p.font_family || "Roboto", dayFS, 700),
+                        text_color: color
+                    }
+                },
+                {
+                    label: {
+                        align: "CENTER",
+                        y: 0,
+                        text: iconLambda,
+                        text_font: getLVGLFont("Material Design Icons", iconS, 400),
+                        text_color: color
+                    }
+                },
+                {
+                    label: {
+                        align: "BOTTOM_MID",
+                        text: showHighLow ? `!lambda "return str_sprintf(\'%.0f/%.0f\', id(weather_high_day${i}).state, id(weather_low_day${i}).state).c_str();"` : `!lambda "return str_sprintf(\'%.0f\', id(weather_high_day${i}).state).c_str();"`,
+                        text_font: getLVGLFont(p.font_family || "Roboto", tempFS, 400),
+                        text_color: color
+                    }
+                }
+            ];
+
+            widgets.push({
+                obj: {
+                    width: isHorizontal ? (100 / days) + "%" : "100%",
+                    height: isHorizontal ? "100%" : (100 / days) + "%",
+                    bg_opa: "TRANSP",
+                    border_width: 0,
+                    widgets: dayWidgets
+                }
+            });
+        }
+
+        return {
+            obj: {
+                ...common,
+                bg_color: convertColor(p.background_color || "white"),
+                bg_opa: "COVER",
+                radius: 8,
+                border_width: p.show_border !== false ? (p.border_width || 1) : 0,
+                border_color: convertColor(p.border_color || p.color || "black"),
+                layout: { type: "FLEX", flex_flow: isHorizontal ? "ROW" : "COLUMN", flex_align_main: "SPACE_AROUND", flex_align_cross: "CENTER" },
+                widgets: widgets
+            }
+        };
+    },
     export: exportDoc,
     onExportNumericSensors,
-    onExportTextSensors
+    onExportTextSensors,
+    collectRequirements
 };
 

@@ -143,6 +143,85 @@ export default {
         drawCalendarPreview(el, widget, props);
     },
 
+    exportLVGL: (w, { common, convertColor, getLVGLFont }) => {
+        const p = w.props || {};
+        const color = convertColor(p.text_color || "black");
+        const bgColor = convertColor(p.background_color || "white");
+        const dateFS = Math.min((p.font_size_date || 100) / 2, 80);
+        const dayFS = parseInt(p.font_size_day || 24, 10);
+        const gridFS = parseInt(p.font_size_grid || 14, 10);
+        const family = p.font_family || "Roboto";
+
+        const headH = dateFS + dayFS + gridFS + 10;
+
+        // Note: This is an LVGL approximation. A full dynamic calendar grid requires 
+        // complex C++ logic or a custom LVGL widget type not yet standard in ESPHome.
+        // We provide a functional header (Date/Day/Month) and a static day-name row.
+
+        const widgets = [
+            {
+                label: {
+                    align: "TOP_MID", y: 2, height: dateFS + 4,
+                    text: '!lambda "char buf[4]; id(ha_time).now().strftime(buf, sizeof(buf), \'%d\'); return buf;"',
+                    text_font: getLVGLFont(family, dateFS, 100), text_color: color
+                }
+            },
+            {
+                label: {
+                    align: "TOP_MID", y: dateFS + 2, height: dayFS + 4,
+                    text: '!lambda "char buf[16]; id(ha_time).now().strftime(buf, sizeof(buf), \'%A\'); return buf;"',
+                    text_font: getLVGLFont(family, dayFS, 700), text_color: color
+                }
+            },
+            {
+                label: {
+                    align: "TOP_MID", y: dateFS + dayFS + 4, height: gridFS + 4,
+                    text: '!lambda "char buf[32]; id(ha_time).now().strftime(buf, sizeof(buf), \'%B %Y\'); return buf;"',
+                    text_font: getLVGLFont(family, gridFS, 400), text_color: color
+                }
+            },
+            {
+                obj: {
+                    width: "100%", height: 1, y: headH, bg_color: color, border_width: 0
+                }
+            }
+        ];
+
+        // Day grid row (Mo Tu We...)
+        widgets.push({
+            obj: {
+                width: "100%", height: "SIZE_CONTENT", y: headH + 5,
+                bg_opa: "TRANSP", border_width: 0,
+                layout: { type: "FLEX", flex_flow: "ROW_WRAP", flex_align_main: "SPACE_AROUND" },
+                widgets: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map(d => ({
+                    label: { text: `"${d}"`, text_font: getLVGLFont(family, gridFS, 700), text_color: color, width: "14%", align: "CENTER" }
+                }))
+            }
+        });
+
+        // Placeholder for the grid body to avoid emptiness
+        widgets.push({
+            label: {
+                y: headH + 40, align: "TOP_MID",
+                text: "\"Calendar Grid Not Supported in LVGL Mode\"",
+                text_font: getLVGLFont("Roboto", 12, 400),
+                text_color: "#888888"
+            }
+        });
+
+        return {
+            obj: {
+                ...common,
+                bg_color: bgColor,
+                bg_opa: "COVER",
+                radius: 8,
+                border_width: p.show_border !== false ? (p.border_width || 2) : 0,
+                border_color: convertColor(p.border_color || "black"),
+                widgets: widgets
+            }
+        };
+    },
+
     export: (w, context) => {
         const {
             lines, addFont, getColorConst, addDitherMask, getCondProps, getConditionCheck, isEpaper

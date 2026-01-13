@@ -292,7 +292,7 @@ export async function renderWidgetPalette(containerId) {
             itemEl.dataset.widgetType = widget.type;
 
             const plugin = PluginRegistry.get(widget.type);
-            const label = plugin?.name || widget.label;
+            const label = widget.label || plugin?.name;
 
             let tagHtml = '';
             if (widget.tag) {

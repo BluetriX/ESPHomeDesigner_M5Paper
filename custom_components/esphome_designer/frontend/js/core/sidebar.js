@@ -210,7 +210,7 @@ export class Sidebar {
 
             if (pages.length > 1) {
                 const delBtn = document.createElement("button");
-                delBtn.textContent = "🗑";
+                delBtn.textContent = "✕";
                 delBtn.className = "btn btn-secondary";
                 delBtn.style.padding = "1px 4px";
                 delBtn.style.fontSize = "8px";
@@ -234,15 +234,7 @@ export class Sidebar {
     }
 
     handleAddPage() {
-        const newId = AppState.pages.length;
-        const newPage = {
-            id: `page_${newId}`,
-            name: `Page ${newId + 1}`,
-            widgets: []
-        };
-        const newPages = [...AppState.pages, newPage];
-        AppState.setPages(newPages);
-        AppState.setCurrentPageIndex(newPages.length - 1);
+        AppState.addPage();
     }
 
     handlePageReorder(fromIndex, toIndex, clientY, targetItem) {

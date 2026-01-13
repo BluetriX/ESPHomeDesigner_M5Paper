@@ -34,6 +34,7 @@ export function render(canvasInstance) {
     pages.forEach((page, index) => {
         const artboardWrapper = document.createElement("div");
         artboardWrapper.className = "artboard-wrapper";
+        artboardWrapper.dataset.index = index;
         if (index === AppState.currentPageIndex) {
             artboardWrapper.classList.add("active-page");
         }
@@ -69,6 +70,47 @@ export function render(canvasInstance) {
             if (window.pageSettings) window.pageSettings.open(index);
         });
         actions.appendChild(settingsBtn);
+
+        // Add Page button (Plus)
+        const addPageBtn = createIconButton("+", "Add Page After", () => {
+            AppState.addPage(index + 1);
+        });
+        actions.appendChild(addPageBtn);
+
+        // Delete Page button (X)
+        const deletePageBtn = createIconButton("✕", "Delete Page", () => {
+            // Confirmation Modal for Deletion
+            const modal = document.createElement('div');
+            modal.className = 'modal-backdrop';
+            modal.style.display = 'flex';
+            modal.innerHTML = `
+                <div class="modal" style="width: 320px; height: auto; min-height: 150px; padding: var(--space-4);">
+                    <div class="modal-header" style="font-size: var(--fs-md); padding-bottom: var(--space-2);">
+                        <div>Delete Page</div>
+                    </div>
+                    <div class="modal-body" style="padding: var(--space-2) 0;">
+                        <p style="margin-bottom: var(--space-3); font-size: var(--fs-sm);">
+                            Are you sure you want to delete the page <b>"${page.name}"</b>?
+                            <br><br>
+                            This action cannot be undone.
+                        </p>
+                    </div>
+                    <div class="modal-actions" style="padding-top: var(--space-3); border-top: 1px solid var(--border-subtle);">
+                        <button class="btn btn-secondary close-btn btn-xs">Cancel</button>
+                        <button class="btn btn-primary confirm-btn btn-xs" style="background: var(--danger); color: white; border: none;">Delete</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            const closeModal = () => modal.remove();
+            modal.querySelector('.close-btn').addEventListener('click', closeModal);
+            modal.querySelector('.confirm-btn').addEventListener('click', () => {
+                closeModal();
+                AppState.deletePage(index);
+            });
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+        });
+        actions.appendChild(deletePageBtn);
 
         header.appendChild(actions);
         artboardWrapper.appendChild(header);
@@ -160,6 +202,7 @@ function createIconButton(text, title, onClick) {
     btn.className = "artboard-btn";
     btn.innerHTML = text;
     btn.title = title;
+    btn.onmousedown = (e) => e.stopPropagation();
     btn.onclick = (e) => {
         e.stopPropagation();
         onClick();
@@ -242,6 +285,12 @@ export function focusPage(canvasInstance, index, smooth = true) {
         const viewportRect = canvasInstance.viewport.getBoundingClientRect();
         const vw = viewportRect.width;
         const vh = viewportRect.height;
+
+        // If viewport has no size yet, defer to next frame to avoid off-screen jump
+        if (vw === 0 || vh === 0) {
+            requestAnimationFrame(() => focusPage(canvasInstance, index, smooth));
+            return;
+        }
 
         const zoom = AppState.zoomLevel;
 

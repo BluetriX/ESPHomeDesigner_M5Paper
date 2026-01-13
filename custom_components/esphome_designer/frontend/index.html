@@ -22,7 +22,7 @@
   <header class="main-header" role="banner">
     <div class="main-header-title">
       <h2><span class="logo-dot"></span> ESPHome Designer</h2>
-      <span>Visual YAML Editor <small style="opacity: 0.5; margin-left: 8px;">Pre_0.9.0b61</small> <span
+      <span>Visual YAML Editor <small style="opacity: 0.5; margin-left: 8px;">Pre_0.9.0b72</small> <span
           id="currentLayoutDevice" style="margin-left:8px; color:var(--accent);"></span></span>
     </div>
     <div class="main-header-actions desktop-only">
@@ -241,7 +241,7 @@
   <div id="pageSettingsModal" class="modal-backdrop hidden">
     <div class="modal">
       <div class="modal-header">
-        <div>Page Configuration</div>
+        <div>Page Settings</div>
         <button id="pageSettingsClose" class="btn btn-secondary">Close</button>
       </div>
       <div class="modal-body">
@@ -295,7 +295,7 @@
   <div id="deviceSettingsModal" class="modal-backdrop hidden">
     <div class="modal">
       <div class="modal-header">
-        <div>Device Configuration</div>
+        <div>Device Settings</div>
         <button id="deviceSettingsClose" class="btn btn-secondary">Close</button>
       </div>
       <div class="modal-body">
@@ -503,12 +503,15 @@
                 style="width: 80px;" min="5">
               <span style="font-size: 11px; opacity: 0.7;">seconds</span>
             </div>
-            <div style="font-size: 10px; opacity: 0.6; margin-top: 4px;">Default time between updates. Can be
-              overridden
+            <div style="font-size: 10px; opacity: 0.6; margin-top: 4px;">Default time between updates. Can be overridden
               on individual pages.</div>
           </div>
 
-          <div style="display:flex; flex-direction:column; gap:12px; margin-top:8px;">
+          <!-- E-Paper Specific Strategies -->
+          <div id="strategy-epaper-group" style="display:flex; flex-direction:column; gap:12px; margin-top:8px;">
+            <div
+              style="font-size:10px; font-weight:bold; text-transform:uppercase; color:var(--muted); margin-bottom:4px;">
+              E-Paper Options</div>
 
             <!-- Standard -->
             <div>
@@ -530,66 +533,8 @@
                   onchange="togglePowerSettings()">
                 Eco (Scheduled Night Sleep)
               </label>
-              <div style="font-size:10px; opacity:0.6; margin-left:24px; margin-bottom:4px;">Stops refreshing
-                during
+              <div style="font-size:10px; opacity:0.6; margin-left:24px; margin-bottom:4px;">Stops refreshing during
                 these hours to save energy.</div>
-              <div id="sleep-times-row"
-                style="display:none; align-items:center; gap:8px; margin-left:24px; background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 4px;">
-                <span style="font-size: 11px; opacity: 0.7;">Sleep from</span>
-                <select id="setting-sleep-start" class="prop-input" style="width:70px;">
-                  <option value="0">00:00</option>
-                  <option value="1">01:00</option>
-                  <option value="2">02:00</option>
-                  <option value="3">03:00</option>
-                  <option value="4">04:00</option>
-                  <option value="5">05:00</option>
-                  <option value="6">06:00</option>
-                  <option value="7">07:00</option>
-                  <option value="8">08:00</option>
-                  <option value="9">09:00</option>
-                  <option value="10">10:00</option>
-                  <option value="11">11:00</option>
-                  <option value="12">12:00</option>
-                  <option value="13">13:00</option>
-                  <option value="14">14:00</option>
-                  <option value="15">15:00</option>
-                  <option value="16">16:00</option>
-                  <option value="17">17:00</option>
-                  <option value="18">18:00</option>
-                  <option value="19">19:00</option>
-                  <option value="20">20:00</option>
-                  <option value="21">21:00</option>
-                  <option value="22">22:00</option>
-                  <option value="23">23:00</option>
-                </select>
-                <span style="font-size: 11px; opacity: 0.7;">to</span>
-                <select id="setting-sleep-end" class="prop-input" style="width:70px;">
-                  <option value="0">00:00</option>
-                  <option value="1">01:00</option>
-                  <option value="2">02:00</option>
-                  <option value="3">03:00</option>
-                  <option value="4">04:00</option>
-                  <option value="5">05:00</option>
-                  <option value="6">06:00</option>
-                  <option value="7">07:00</option>
-                  <option value="8">08:00</option>
-                  <option value="9">09:00</option>
-                  <option value="10">10:00</option>
-                  <option value="11">11:00</option>
-                  <option value="12">12:00</option>
-                  <option value="13">13:00</option>
-                  <option value="14">14:00</option>
-                  <option value="15">15:00</option>
-                  <option value="16">16:00</option>
-                  <option value="17">17:00</option>
-                  <option value="18">18:00</option>
-                  <option value="19">19:00</option>
-                  <option value="20">20:00</option>
-                  <option value="21">21:00</option>
-                  <option value="22">22:00</option>
-                  <option value="23">23:00</option>
-                </select>
-              </div>
             </div>
 
             <!-- Daily Refresh -->
@@ -600,15 +545,8 @@
                   onchange="togglePowerSettings()">
                 Daily Scheduled Refresh
               </label>
-              <div style="font-size:10px; opacity:0.6; margin-left:24px; margin-bottom:4px;">Wakes up once per day
-                at a
+              <div style="font-size:10px; opacity:0.6; margin-left:24px; margin-bottom:4px;">Wakes up once per day at a
                 specific time.</div>
-              <div id="daily-refresh-row"
-                style="display:none; align-items:center; gap:8px; margin-left:24px; background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 4px;">
-                <span style="font-size: 11px; opacity: 0.7;">Refresh at</span>
-                <input type="time" id="setting-daily-refresh-time" class="prop-input" value="08:00"
-                  style="width:100px;">
-              </div>
             </div>
 
             <!-- Manual Only -->
@@ -619,8 +557,7 @@
                   onchange="togglePowerSettings()">
                 Manual Refresh Only
               </label>
-              <div style="font-size:10px; opacity:0.6; margin-left:24px;">Never updates automatically. Only
-                refreshes
+              <div style="font-size:10px; opacity:0.6; margin-left:24px;">Never updates automatically. Only refreshes
                 when a button is pressed.</div>
             </div>
 
@@ -634,125 +571,238 @@
               </label>
               <div style="font-size:10px; opacity:0.6; margin-left:24px; margin-bottom:4px;">Shuts down completely
                 between updates. Best for battery life.</div>
-              <div id="deep-sleep-interval-row"
-                style="display:none; align-items:center; gap:8px; margin-left:24px; background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 4px;">
-                <span style="font-size: 11px; opacity: 0.7;">Update every</span>
-                <input type="number" id="setting-deep-sleep-interval" class="prop-input" placeholder="Seconds"
+            </div>
+          </div>
+
+          <!-- LCD Specific Strategies -->
+          <div id="strategy-lcd-group" style="display:none; flex-direction:column; gap:12px; margin-top:8px;">
+            <div
+              style="font-size:10px; font-weight:bold; text-transform:uppercase; color:var(--muted); margin-bottom:4px;">
+              LCD / OLED Options</div>
+
+            <div>
+              <label
+                style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:var(--fs-sm); font-weight: 500;">
+                <input type="radio" name="lcdEcoStrategy" value="always_on" onchange="togglePowerSettings()">
+                Always On (Full Brightness)
+              </label>
+            </div>
+
+            <div>
+              <label
+                style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:var(--fs-sm); font-weight: 500;">
+                <input type="radio" name="lcdEcoStrategy" value="backlight_off" onchange="togglePowerSettings()">
+                Eco (Backlight Off Schedule)
+              </label>
+              <div style="font-size:10px; opacity:0.6; margin-left:24px;">Turns off backlight during sleep hours
+                (recommended for LCD).</div>
+            </div>
+
+            <div>
+              <label
+                style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:var(--fs-sm); font-weight: 500;">
+                <input type="radio" name="lcdEcoStrategy" value="halt_updates" onchange="togglePowerSettings()">
+                Eco (Halt Loop)
+              </label>
+              <div style="font-size:10px; opacity:0.6; margin-left:24px;">Stops update cycle but leaves screen powered.
+              </div>
+            </div>
+
+            <div>
+              <label
+                style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:var(--fs-sm); font-weight: 500;">
+                <input type="radio" name="lcdEcoStrategy" value="deep_sleep" onchange="togglePowerSettings()">
+                Ultra Eco (Deep Sleep)
+              </label>
+              <div style="font-size:10px; opacity:0.6; margin-left:24px;">Power down between updates.</div>
+            </div>
+          </div>
+
+          <!-- Common Sleep Times (Used by both) -->
+          <div id="sleep-times-row"
+            style="display:none; flex-direction:column; gap:8px; margin-left:24px; margin-top:8px; background: rgba(0,0,0,0.03); padding: 8px; border-radius: 4px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size: 11px; opacity: 0.7;">Sleep from</span>
+              <select id="setting-sleep-start" class="prop-input" style="width:70px;">
+                <option value="0">00:00</option>
+                <option value="1">01:00</option>
+                <option value="2">02:00</option>
+                <option value="3">03:00</option>
+                <option value="4">04:00</option>
+                <option value="5">05:00</option>
+                <option value="6">06:00</option>
+                <option value="7">07:00</option>
+                <option value="8">08:00</option>
+                <option value="9">09:00</option>
+                <option value="10">10:00</option>
+                <option value="11">11:00</option>
+                <option value="12">12:00</option>
+                <option value="13">13:00</option>
+                <option value="14">14:00</option>
+                <option value="15">15:00</option>
+                <option value="16">16:00</option>
+                <option value="17">17:00</option>
+                <option value="18">18:00</option>
+                <option value="19">19:00</option>
+                <option value="20">20:00</option>
+                <option value="21">21:00</option>
+                <option value="22">22:00</option>
+                <option value="23">23:00</option>
+              </select>
+              <span style="font-size: 11px; opacity: 0.7;">to</span>
+              <select id="setting-sleep-end" class="prop-input" style="width:70px;">
+                <option value="0">00:00</option>
+                <option value="1">01:00</option>
+                <option value="2">02:00</option>
+                <option value="3">03:00</option>
+                <option value="4">04:00</option>
+                <option value="5">05:00</option>
+                <option value="6">06:00</option>
+                <option value="7">07:00</option>
+                <option value="8">08:00</option>
+                <option value="9">09:00</option>
+                <option value="10">10:00</option>
+                <option value="11">11:00</option>
+                <option value="12">12:00</option>
+                <option value="13">13:00</option>
+                <option value="14">14:00</option>
+                <option value="15">15:00</option>
+                <option value="16">16:00</option>
+                <option value="17">17:00</option>
+                <option value="18">18:00</option>
+                <option value="19">19:00</option>
+                <option value="20">20:00</option>
+                <option value="21">21:00</option>
+                <option value="22">22:00</option>
+                <option value="23">23:00</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="daily-refresh-row"
+            style="display:none; align-items:center; gap:8px; margin-left:24px; margin-top:8px; background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 4px;">
+            <span style="font-size: 11px; opacity: 0.7;">Refresh at</span>
+            <input type="time" id="setting-daily-refresh-time" class="prop-input" value="08:00" style="width:100px;">
+          </div>
+
+          <div id="deep-sleep-interval-row"
+            style="display:none; align-items:center; gap:8px; margin-left:24px; margin-top:8px; background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 4px;">
+            <span style="font-size: 11px; opacity: 0.7;">Update every</span>
+            <input type="number" id="setting-deep-sleep-interval" class="prop-input" placeholder="Seconds"
+              style="width:80px;">
+            <span style="font-size: 11px; opacity: 0.7;">sec</span>
+          </div>
+
+          <!-- Silent Hours -->
+          <div style="border-top:1px solid var(--border-subtle); margin-top:8px; padding-top:12px;">
+            <div
+              style="display:flex; align-items:center; gap:8px; font-size:var(--fs-sm); font-weight: 500; color: var(--accent);">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path
+                  d="M17.22 17.22L2 2M12 2v2M4.93 4.93l1.41 1.41M2 12h2M6.34 17.66l-1.41 1.41M12 22v-2m7.07-2.93l-1.41-1.41M22 12h-2m-3.34-5.66l1.41-1.41M12 7a5 5 0 015 5 4.94 4.94 0 01-.46 2.06M12 17a5 5 0 01-5-5 4.94 4.94 0 01.46-2.06">
+                </path>
+              </svg>
+              Silent Hours (No Refresh Window)
+            </div>
+            <div style="font-size:10px; opacity:0.6; margin-left:24px; margin-bottom:8px;">Prevent all display
+              updates
+              during this time window. Used to avoid night-time ghosts/noise.</div>
+            <div
+              style="display:flex; align-items:center; gap:8px; margin-left:24px; background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 4px;">
+              <span style="font-size: 11px; opacity: 0.7;">Disable updates from</span>
+              <select id="setting-no-refresh-start" class="prop-input" style="width:70px;">
+                <option value="">None</option>
+                <option value="0">00:00</option>
+                <option value="1">01:00</option>
+                <option value="2">02:00</option>
+                <option value="3">03:00</option>
+                <option value="4">04:00</option>
+                <option value="5">05:00</option>
+                <option value="6">06:00</option>
+                <option value="7">07:00</option>
+                <option value="8">08:00</option>
+                <option value="9">09:00</option>
+                <option value="10">10:00</option>
+                <option value="11">11:00</option>
+                <option value="12">12:00</option>
+                <option value="13">13:00</option>
+                <option value="14">14:00</option>
+                <option value="15">15:00</option>
+                <option value="16">16:00</option>
+                <option value="17">17:00</option>
+                <option value="18">18:00</option>
+                <option value="19">19:00</option>
+                <option value="20">20:00</option>
+                <option value="21">21:00</option>
+                <option value="22">22:00</option>
+                <option value="23">23:00</option>
+              </select>
+              <span style="font-size: 11px; opacity: 0.7;">to</span>
+              <select id="setting-no-refresh-end" class="prop-input" style="width:70px;">
+                <option value="">None</option>
+                <option value="0">00:00</option>
+                <option value="1">01:00</option>
+                <option value="2">02:00</option>
+                <option value="3">03:00</option>
+                <option value="4">04:00</option>
+                <option value="5">05:00</option>
+                <option value="6">06:00</option>
+                <option value="7">07:00</option>
+                <option value="8">08:00</option>
+                <option value="9">09:00</option>
+                <option value="10">10:00</option>
+                <option value="11">11:00</option>
+                <option value="12">12:00</option>
+                <option value="13">13:00</option>
+                <option value="14">14:00</option>
+                <option value="15">15:00</option>
+                <option value="16">16:00</option>
+                <option value="17">17:00</option>
+                <option value="18">18:00</option>
+                <option value="19">19:00</option>
+                <option value="20">20:00</option>
+                <option value="21">21:00</option>
+                <option value="22">22:00</option>
+                <option value="23">23:00</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Page Auto-Cycling -->
+          <div style="border-top:1px solid var(--border-subtle); margin-top:8px; padding-top:12px;">
+            <div
+              style="display:flex; align-items:center; gap:8px; font-size:var(--fs-sm); font-weight: 600; color: var(--accent);">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              Page Auto-Cycling
+            </div>
+            <div style="font-size:10px; opacity:0.6; margin-left:24px; margin-bottom:8px;">Automatically cycle
+              through
+              pages on a timer.</div>
+            <div style="margin-left: 24px; display: flex; flex-direction: column; gap: 8px;">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input id="setting-auto-cycle" type="checkbox" />
+                <span style="font-size:var(--fs-xs); font-weight:500;">Enable Automatic Page Cycling</span>
+              </label>
+              <div id="field-auto-cycle-interval"
+                style="display:none; align-items:center; gap:8px; background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 4px;">
+                <span style="font-size: 11px; opacity: 0.7;">Cycle every</span>
+                <input type="number" id="setting-auto-cycle-interval" class="prop-input" min="5" placeholder="30"
                   style="width:80px;">
-                <span style="font-size: 11px; opacity: 0.7;">sec</span>
-              </div>
-            </div>
-
-            <!-- Silent Hours -->
-            <div style="border-top:1px solid var(--border-subtle); margin-top:8px; padding-top:12px;">
-              <div
-                style="display:flex; align-items:center; gap:8px; font-size:var(--fs-sm); font-weight: 500; color: var(--accent);">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path
-                    d="M17.22 17.22L2 2M12 2v2M4.93 4.93l1.41 1.41M2 12h2M6.34 17.66l-1.41 1.41M12 22v-2m7.07-2.93l-1.41-1.41M22 12h-2m-3.34-5.66l1.41-1.41M12 7a5 5 0 015 5 4.94 4.94 0 01-.46 2.06M12 17a5 5 0 01-5-5 4.94 4.94 0 01.46-2.06">
-                  </path>
-                </svg>
-                Silent Hours (No Refresh Window)
-              </div>
-              <div style="font-size:10px; opacity:0.6; margin-left:24px; margin-bottom:8px;">Prevent all display
-                updates
-                during this time window. Used to avoid night-time ghosts/noise.</div>
-              <div
-                style="display:flex; align-items:center; gap:8px; margin-left:24px; background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 4px;">
-                <span style="font-size: 11px; opacity: 0.7;">Disable updates from</span>
-                <select id="setting-no-refresh-start" class="prop-input" style="width:70px;">
-                  <option value="">None</option>
-                  <option value="0">00:00</option>
-                  <option value="1">01:00</option>
-                  <option value="2">02:00</option>
-                  <option value="3">03:00</option>
-                  <option value="4">04:00</option>
-                  <option value="5">05:00</option>
-                  <option value="6">06:00</option>
-                  <option value="7">07:00</option>
-                  <option value="8">08:00</option>
-                  <option value="9">09:00</option>
-                  <option value="10">10:00</option>
-                  <option value="11">11:00</option>
-                  <option value="12">12:00</option>
-                  <option value="13">13:00</option>
-                  <option value="14">14:00</option>
-                  <option value="15">15:00</option>
-                  <option value="16">16:00</option>
-                  <option value="17">17:00</option>
-                  <option value="18">18:00</option>
-                  <option value="19">19:00</option>
-                  <option value="20">20:00</option>
-                  <option value="21">21:00</option>
-                  <option value="22">22:00</option>
-                  <option value="23">23:00</option>
-                </select>
-                <span style="font-size: 11px; opacity: 0.7;">to</span>
-                <select id="setting-no-refresh-end" class="prop-input" style="width:70px;">
-                  <option value="">None</option>
-                  <option value="0">00:00</option>
-                  <option value="1">01:00</option>
-                  <option value="2">02:00</option>
-                  <option value="3">03:00</option>
-                  <option value="4">04:00</option>
-                  <option value="5">05:00</option>
-                  <option value="6">06:00</option>
-                  <option value="7">07:00</option>
-                  <option value="8">08:00</option>
-                  <option value="9">09:00</option>
-                  <option value="10">10:00</option>
-                  <option value="11">11:00</option>
-                  <option value="12">12:00</option>
-                  <option value="13">13:00</option>
-                  <option value="14">14:00</option>
-                  <option value="15">15:00</option>
-                  <option value="16">16:00</option>
-                  <option value="17">17:00</option>
-                  <option value="18">18:00</option>
-                  <option value="19">19:00</option>
-                  <option value="20">20:00</option>
-                  <option value="21">21:00</option>
-                  <option value="22">22:00</option>
-                  <option value="23">23:00</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Page Auto-Cycling -->
-            <div style="border-top:1px solid var(--border-subtle); margin-top:8px; padding-top:12px;">
-              <div
-                style="display:flex; align-items:center; gap:8px; font-size:var(--fs-sm); font-weight: 600; color: var(--accent);">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="23 4 23 10 17 10"></polyline>
-                  <polyline points="1 20 1 14 7 14"></polyline>
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                </svg>
-                Page Auto-Cycling
-              </div>
-              <div style="font-size:10px; opacity:0.6; margin-left:24px; margin-bottom:8px;">Automatically cycle
-                through
-                pages on a timer.</div>
-              <div style="margin-left: 24px; display: flex; flex-direction: column; gap: 8px;">
-                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                  <input id="setting-auto-cycle" type="checkbox" />
-                  <span style="font-size:var(--fs-xs); font-weight:500;">Enable Automatic Page Cycling</span>
-                </label>
-                <div id="field-auto-cycle-interval"
-                  style="display:none; align-items:center; gap:8px; background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 4px;">
-                  <span style="font-size: 11px; opacity: 0.7;">Cycle every</span>
-                  <input type="number" id="setting-auto-cycle-interval" class="prop-input" min="5" placeholder="30"
-                    style="width:80px;">
-                  <span style="font-size: 11px; opacity: 0.7;">seconds</span>
-                </div>
+                <span style="font-size: 11px; opacity: 0.7;">seconds</span>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div class="modal-actions">
-        <button id="deviceSettingsSave" class="btn btn-secondary">Apply Settings</button>
-      </div>
     </div>
+    <div class="modal-actions">
+      <button id="deviceSettingsSave" class="btn btn-secondary">Apply Settings</button>
+    </div>
+  </div>
   </div>
 
   <!-- Save Profile Modal -->

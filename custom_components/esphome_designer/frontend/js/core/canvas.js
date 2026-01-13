@@ -44,6 +44,14 @@ export class Canvas {
         });
         on(EVENTS.ZOOM_CHANGED, () => this.applyZoom());
 
+        // Handle window resizing to keep canvas centered
+        this._boundResize = () => {
+            if (AppState.currentPageIndex !== -1) {
+                this.focusPage(AppState.currentPageIndex, false);
+            }
+        };
+        window.addEventListener("resize", this._boundResize);
+
         this.setupInteractions();
         this.render();
         this.applyZoom();
@@ -52,7 +60,7 @@ export class Canvas {
         if (this.updateInterval) clearInterval(this.updateInterval);
         this.updateInterval = setInterval(() => {
             // SKIP auto-render during active interaction to prevent DOM detachment
-            if (this.touchState || this.pinchState || this.dragState || this.panState) return;
+            if (this.touchState || this.pinchState || this.dragState || this.panState || this.lassoState) return;
 
             // Only re-render if there is a datetime widget on the current page to avoid unnecessary overhead
             const page = AppState.getCurrentPage();
@@ -98,9 +106,11 @@ export class Canvas {
             this.updateInterval = null;
         }
 
-        // Remove event subscriptions if they were stored...
-        // Note: The current event system (mitt-like) might not return unsubscribe functions directly
-        // in the simple `on()` wrapper unless verified.
+        // Remove window listeners
+        if (this._boundResize) {
+            window.removeEventListener("resize", this._boundResize);
+        }
+
         // Assuming we rely on page refresh for now, but good practice to clear timers.
     }
 }

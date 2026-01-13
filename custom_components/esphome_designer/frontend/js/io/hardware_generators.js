@@ -516,16 +516,22 @@ export function generateBinarySensorSection(profile, numPages, displayId = "my_d
                         lines.push(`    y_max: ${yMax}`);
                         lines.push(`    on_press:`);
 
+                        const pageIdx = w._pageIndex !== undefined ? w._pageIndex : 0;
+                        lines.push(`      - if:`);
+                        lines.push(`          condition:`);
+                        lines.push(`            lambda: 'return id(display_page) == ${pageIdx};'`);
+                        lines.push(`          then:`);
+
                         if (action === "prev") {
-                            lines.push(`      - script.execute:`);
-                            lines.push(`          id: change_page_to`);
-                            lines.push(`          target_page: !lambda 'return id(display_page) - 1;'`);
+                            lines.push(`            - script.execute:`);
+                            lines.push(`                id: change_page_to`);
+                            lines.push(`                target_page: !lambda 'return id(display_page) - 1;'`);
                         } else if (action === "home") {
-                            lines.push(`      - script.execute: manage_run_and_sleep`);
+                            lines.push(`            - script.execute: manage_run_and_sleep`);
                         } else if (action === "next") {
-                            lines.push(`      - script.execute:`);
-                            lines.push(`          id: change_page_to`);
-                            lines.push(`          target_page: !lambda 'return id(display_page) + 1;'`);
+                            lines.push(`            - script.execute:`);
+                            lines.push(`                id: change_page_to`);
+                            lines.push(`                target_page: !lambda 'return id(display_page) + 1;'`);
                         }
                         currentIdx++;
                     };
@@ -549,6 +555,7 @@ export function generateBinarySensorSection(profile, numPages, displayId = "my_d
                 yMin = Math.max(0, yMin);
 
                 const navAction = p.nav_action || "none";
+                const pageIdx = w._pageIndex !== undefined ? w._pageIndex : 0;
 
                 lines.push(`  - platform: touchscreen`);
                 lines.push(`    id: ${safeId}`);
@@ -558,25 +565,29 @@ export function generateBinarySensorSection(profile, numPages, displayId = "my_d
                 lines.push(`    y_min: ${yMin}`);
                 lines.push(`    y_max: ${yMax}`);
 
-                if (navAction === "next_page") {
+                if (navAction !== "none" || w.entity_id) {
                     lines.push(`    on_press:`);
-                    lines.push(`      - script.execute:`);
-                    lines.push(`          id: change_page_to`);
-                    lines.push(`          target_page: !lambda 'return id(display_page) + 1;'`);
-                } else if (navAction === "previous_page") {
-                    lines.push(`    on_press:`);
-                    lines.push(`      - script.execute:`);
-                    lines.push(`          id: change_page_to`);
-                    lines.push(`          target_page: !lambda 'return id(display_page) - 1;'`);
-                } else if (navAction === "reload_page") {
-                    lines.push(`    on_press:`);
-                    lines.push(`      - script.execute: manage_run_and_sleep`);
-                } else if (w.entity_id) {
-                    lines.push(`    on_press:`);
-                    lines.push(`      - homeassistant.service:`);
-                    lines.push(`          service: homeassistant.toggle`);
-                    lines.push(`          data:`);
-                    lines.push(`            entity_id: ${w.entity_id}`);
+                    lines.push(`      - if:`);
+                    lines.push(`          condition:`);
+                    lines.push(`            lambda: 'return id(display_page) == ${pageIdx};'`);
+                    lines.push(`          then:`);
+
+                    if (navAction === "next_page") {
+                        lines.push(`            - script.execute:`);
+                        lines.push(`                id: change_page_to`);
+                        lines.push(`                target_page: !lambda 'return id(display_page) + 1;'`);
+                    } else if (navAction === "previous_page") {
+                        lines.push(`            - script.execute:`);
+                        lines.push(`                id: change_page_to`);
+                        lines.push(`                target_page: !lambda 'return id(display_page) - 1;'`);
+                    } else if (navAction === "reload_page") {
+                        lines.push(`            - script.execute: manage_run_and_sleep`);
+                    } else if (w.entity_id) {
+                        lines.push(`            - homeassistant.service:`);
+                        lines.push(`                service: homeassistant.toggle`);
+                        lines.push(`                data:`);
+                        lines.push(`                  entity_id: ${w.entity_id}`);
+                    }
                 }
             }
         });

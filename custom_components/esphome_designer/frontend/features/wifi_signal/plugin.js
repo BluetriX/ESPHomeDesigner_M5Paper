@@ -137,7 +137,118 @@ export default {
         is_local_sensor: true
     },
     render,
+    exportLVGL: (w, { common, convertColor, getLVGLFont, formatOpacity }) => {
+        const p = w.props || {};
+        const entityId = (w.entity_id || "").trim();
+        const isLocal = p.is_local_sensor !== false;
+        const sensorId = isLocal ? "wifi_signal_dbm" : (entityId ? entityId.replace(/[^a-zA-Z0-9_]/g, "_") : "wifi_signal_dbm");
+        const color = convertColor(p.color || "black");
+        const iconSize = parseInt(p.size || 24, 10);
+        const fontSize = parseInt(p.font_size || 12, 10);
+        const showDbm = p.show_dbm !== false;
+
+        let iconLambda = '!lambda |-\n';
+        iconLambda += `          if (id(${sensorId}).has_state()) {\n`;
+        iconLambda += `            float sig = id(${sensorId}).state;\n`;
+        iconLambda += `            if (sig >= -50) return "\\U000F0928";\n`;
+        iconLambda += `            if (sig >= -60) return "\\U000F0925";\n`;
+        iconLambda += `            if (sig >= -75) return "\\U000F0922";\n`;
+        iconLambda += `            if (sig >= -100) return "\\U000F091F";\n`;
+        iconLambda += `            return "\\U000F092B";\n`;
+        iconLambda += '          }\n';
+        iconLambda += '          return "\\U000F092B";';
+
+        const widgets = [
+            {
+                label: {
+                    width: iconSize + 10,
+                    height: iconSize + 4,
+                    align: "TOP_MID",
+                    text: iconLambda,
+                    text_font: getLVGLFont("Material Design Icons", iconSize, 400),
+                    text_color: color
+                }
+            }
+        ];
+
+        if (showDbm) {
+            let textLambda = '!lambda |-\n';
+            textLambda += `          if (id(${sensorId}).has_state()) {\n`;
+            textLambda += `            return str_sprintf("%.0fdB", id(${sensorId}).state).c_str();\n`;
+            textLambda += '          }\n';
+            textLambda += '          return "---dB";';
+
+            widgets.push({
+                label: {
+                    width: "100%",
+                    height: fontSize + 4,
+                    align: "BOTTOM_MID",
+                    y: 2,
+                    text: textLambda,
+                    text_font: getLVGLFont("Roboto", fontSize, 400),
+                    text_color: color,
+                    text_align: "CENTER"
+                }
+            });
+        }
+
+        return {
+            obj: {
+                ...common,
+                bg_opa: "TRANSP",
+                border_width: 0,
+                widgets: widgets
+            }
+        };
+    },
+    collectRequirements: (w, context) => {
+        const { trackIcon, addFont } = context;
+        const p = w.props || {};
+        const size = parseInt(p.size || 24, 10);
+        const fontSize = parseInt(p.font_size || 12, 10);
+
+        addFont("Material Design Icons", 400, size);
+        addFont("Roboto", 400, fontSize);
+
+        ["F0928", "F0925", "F0922", "F091F", "F092B"].forEach(c => trackIcon(c, size));
+    },
     export: exportDoc,
-    onExportNumericSensors
+    onExportNumericSensors: (context) => {
+        const { lines, widgets } = context;
+        if (!widgets) return;
+
+        const processed = new Set();
+        let needsLocalWifi = false;
+
+        for (const w of widgets) {
+            if (w.type !== "wifi_signal") continue;
+
+            const p = w.props || {};
+            const isLocal = p.is_local_sensor !== false;
+
+            if (isLocal) {
+                needsLocalWifi = true;
+                continue;
+            }
+
+            let eid = (w.entity_id || "").trim();
+            if (!eid) continue;
+
+            // Ensure sensor. prefix if missing
+            if (!eid.includes(".")) {
+                eid = `sensor.${eid}`;
+            }
+
+            if (!processed.has(eid)) {
+                processed.add(eid);
+                const safeId = eid.replace(/[^a-zA-Z0-9_]/g, "_");
+                lines.push("- platform: homeassistant", `  id: ${safeId}`, `  entity_id: ${eid}`, "  internal: true");
+            }
+        }
+
+        if (needsLocalWifi && !lines.some(l => l.includes("id: wifi_signal_dbm"))) {
+            lines.push("- platform: wifi_signal", "  name: \"WiFi Signal\"", "  id: wifi_signal_dbm", "  update_interval: 60s");
+        }
+    }
 };
 

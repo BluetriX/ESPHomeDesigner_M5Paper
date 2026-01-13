@@ -197,16 +197,22 @@ const onExportBinarySensors = (context) => {
                 lines.push(`    y_max: ${yMax}`);
                 lines.push(`    on_press:`);
 
+                const pageIdx = w._pageIndex !== undefined ? w._pageIndex : 0;
+                lines.push(`      - if:`);
+                lines.push(`          condition:`);
+                lines.push(`            lambda: 'return id(display_page) == ${pageIdx};'`);
+                lines.push(`          then:`);
+
                 if (action === "prev") {
-                    lines.push(`      - script.execute:`);
-                    lines.push(`          id: change_page_to`);
-                    lines.push(`          target_page: !lambda 'return id(display_page) - 1;'`);
+                    lines.push(`            - script.execute:`);
+                    lines.push(`                id: change_page_to`);
+                    lines.push(`                target_page: !lambda 'return id(display_page) - 1;'`);
                 } else if (action === "home") {
-                    lines.push(`      - script.execute: manage_run_and_sleep`);
+                    lines.push(`            - script.execute: manage_run_and_sleep`);
                 } else if (action === "next") {
-                    lines.push(`      - script.execute:`);
-                    lines.push(`          id: change_page_to`);
-                    lines.push(`          target_page: !lambda 'return id(display_page) + 1;'`);
+                    lines.push(`            - script.execute:`);
+                    lines.push(`                id: change_page_to`);
+                    lines.push(`                target_page: !lambda 'return id(display_page) + 1;'`);
                 }
                 currentIdx++;
             };
@@ -235,7 +241,80 @@ export default {
         icon_size: 24
     },
     render,
+    exportLVGL: (w, { common, convertColor, getLVGLFont }) => {
+        const p = w.props || {};
+        const iconSize = parseInt(p.icon_size || 24, 10);
+        const color = convertColor(p.color || "white");
+        const showPrev = p.show_prev !== false;
+        const showHome = p.show_home !== false;
+        const showNext = p.show_next !== false;
+
+        const widgets = [];
+        const btnProps = {
+            width: iconSize + 16,
+            height: "100%",
+            bg_opa: "TRANSP",
+            border_width: 0,
+            radius: 0,
+            pad_all: 0,
+            layout: { type: "FLEX", flex_align_main: "CENTER", flex_align_cross: "CENTER" }
+        };
+
+        const iconFont = getLVGLFont("Material Design Icons", iconSize, 400);
+
+        if (showPrev) {
+            widgets.push({
+                button: {
+                    ...btnProps,
+                    on_click: [{ "script.execute": { id: "change_page_to", target_page: "!lambda 'return id(display_page) - 1;'" } }],
+                    widgets: [{ label: { align: "CENTER", text: '"\\U000F0141"', text_font: iconFont, text_color: color } }]
+                }
+            });
+        }
+        if (showHome) {
+            widgets.push({
+                button: {
+                    ...btnProps,
+                    on_click: [{ "script.execute": "manage_run_and_sleep" }],
+                    widgets: [{ label: { align: "CENTER", text: '"\\U000F02DC"', text_font: iconFont, text_color: color } }]
+                }
+            });
+        }
+        if (showNext) {
+            widgets.push({
+                button: {
+                    ...btnProps,
+                    on_click: [{ "script.execute": { id: "change_page_to", target_page: "!lambda 'return id(display_page) + 1;'" } }],
+                    widgets: [{ label: { align: "CENTER", text: '"\\U000F0142"', text_font: iconFont, text_color: color } }]
+                }
+            });
+        }
+
+        return {
+            obj: {
+                ...common,
+                bg_color: p.show_background !== false ? convertColor(p.background_color || "black") : "TRANSP",
+                bg_opa: p.show_background !== false ? "COVER" : "TRANSP",
+                radius: p.border_radius || 8,
+                border_width: p.border_thickness || 0,
+                border_color: convertColor(p.border_color || "white"),
+                layout: { type: "FLEX", flex_flow: "ROW", flex_align_main: "SPACE_AROUND", flex_align_cross: "CENTER" },
+                widgets: widgets
+            }
+        };
+    },
     export: exportDoc,
-    onExportBinarySensors
+    onExportBinarySensors,
+    collectRequirements: (widget, context) => {
+        const { trackIcon, addFont } = context;
+        const p = widget.props || {};
+        const iconSize = parseInt(p.icon_size || 24, 10);
+
+        addFont("Material Design Icons", 400, iconSize);
+
+        if (p.show_prev !== false) trackIcon("F0141", iconSize);
+        if (p.show_home !== false) trackIcon("F02DC", iconSize);
+        if (p.show_next !== false) trackIcon("F0142", iconSize);
+    }
 };
 

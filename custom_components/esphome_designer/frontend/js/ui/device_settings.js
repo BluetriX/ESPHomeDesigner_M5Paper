@@ -69,6 +69,10 @@ export class DeviceSettings {
 
         // Inline Profile Name
         this.customProfileNameInput = document.getElementById('customProfileName');
+
+        // Strategy Groups (E-Paper vs LCD)
+        this.strategyEpaperGroup = document.getElementById('strategy-epaper-group');
+        this.strategyLcdGroup = document.getElementById('strategy-lcd-group');
     }
     init() {
         if (this.closeBtn) {
@@ -113,6 +117,12 @@ export class DeviceSettings {
         this.modelInput.addEventListener('change', () => {
             this.updateCustomSectionVisibility();
         });
+
+        if (this.customTech) {
+            this.customTech.addEventListener('change', () => {
+                this.updateStrategyGroupVisibility();
+            });
+        }
 
         if (this.customTouchTech) {
             this.customTouchTech.addEventListener('change', () => {
@@ -319,16 +329,16 @@ export class DeviceSettings {
         if (this.nameInput) this.nameInput.value = AppState.settings.device_name || "My E-Ink Display";
         if (this.modelInput) this.modelInput.value = AppState.settings.device_model || "reterminal_e1001";
         if (this.orientationInput) this.orientationInput.value = AppState.settings.orientation || "landscape";
-        if (this.darkModeInput) this.darkModeInput.checked = !!AppState.settings.dark_mode;
-        if (this.extendedLatinGlyphsInput) this.extendedLatinGlyphsInput.checked = !!AppState.settings.extended_latin_glyphs;
-        if (this.invertedColorsInput) this.invertedColorsInput.checked = !!AppState.settings.inverted_colors;
+        if (this.darkModeInput) this.darkModeInput.checked = !!AppState.settings.darkMode;
+        if (this.extendedLatinGlyphsInput) this.extendedLatinGlyphsInput.checked = !!AppState.settings.extendedLatinGlyphs;
+        if (this.invertedColorsInput) this.invertedColorsInput.checked = !!AppState.settings.invertedColors;
 
         // Determine power mode
         const s = AppState.settings;
-        const isSleep = !!s.sleep_enabled;
-        const isManual = !!s.manual_refresh_only;
-        const isDeepSleep = !!s.deep_sleep_enabled;
-        const isDaily = !!s.daily_refresh_enabled;
+        const isSleep = !!s.sleepEnabled;
+        const isManual = !!s.manualRefreshOnly;
+        const isDeepSleep = !!s.deepSleepEnabled;
+        const isDaily = !!s.dailyRefreshEnabled;
         const isStandard = !isSleep && !isManual && !isDeepSleep && !isDaily;
 
         if (this.modeStandard) this.modeStandard.checked = isStandard;
@@ -338,22 +348,23 @@ export class DeviceSettings {
         if (this.modeDaily) this.modeDaily.checked = isDaily;
 
         // Set time inputs
-        if (this.sleepStart) this.sleepStart.value = s.sleep_start_hour ?? 0;
-        if (this.sleepEnd) this.sleepEnd.value = s.sleep_end_hour ?? 5;
-        if (this.dailyRefreshTime) this.dailyRefreshTime.value = s.daily_refresh_time || "08:00";
-        if (this.deepSleepInterval) this.deepSleepInterval.value = s.deep_sleep_interval ?? 600;
-        if (this.refreshIntervalInput) this.refreshIntervalInput.value = s.refresh_interval ?? 600;
+        if (this.sleepStart) this.sleepStart.value = s.sleepStartHour ?? 0;
+        if (this.sleepEnd) this.sleepEnd.value = s.sleepEndHour ?? 5;
+        if (this.dailyRefreshTime) this.dailyRefreshTime.value = s.dailyRefreshTime || "08:00";
+        if (this.deepSleepInterval) this.deepSleepInterval.value = s.deepSleepInterval ?? 600;
+        if (this.refreshIntervalInput) this.refreshIntervalInput.value = s.refreshInterval ?? 600;
 
         // Silent Hours
-        if (this.noRefreshStart) this.noRefreshStart.value = s.no_refresh_start_hour ?? "";
-        if (this.noRefreshEnd) this.noRefreshEnd.value = s.no_refresh_end_hour ?? "";
+        if (this.noRefreshStart) this.noRefreshStart.value = s.noRefreshStartHour ?? "";
+        if (this.noRefreshEnd) this.noRefreshEnd.value = s.noRefreshEndHour ?? "";
 
         // Auto-Cycle
-        if (this.autoCycleEnabled) this.autoCycleEnabled.checked = !!s.auto_cycle_enabled;
-        if (this.autoCycleInterval) this.autoCycleInterval.value = s.auto_cycle_interval_s ?? 30;
+        if (this.autoCycleEnabled) this.autoCycleEnabled.checked = !!s.autoCycleEnabled;
+        if (this.autoCycleInterval) this.autoCycleInterval.value = s.autoCycleIntervalS ?? 30;
 
         // Show/hide sub-settings
         this.updateVisibility();
+        this.updateStrategyGroupVisibility();
         this.populateCustomFields();
         this.updateCustomSectionVisibility();
 
@@ -497,9 +508,8 @@ export class DeviceSettings {
 
     setupAutoSaveListeners() {
         const updateSetting = (key, value) => {
-            AppState.settings[key] = value;
-            Logger.log(`Auto - saved ${key}: `, value);
-            emit(EVENTS.STATE_CHANGED); // Trigger snippet update
+            AppState.updateSettings({ [key]: value });
+            Logger.log(`Auto-saved ${key}:`, value);
             this.persistToBackend();
         };
 
@@ -533,6 +543,7 @@ export class DeviceSettings {
                 window.currentDeviceModel = newModel;
                 AppState.setDeviceModel(newModel); // Update top-level deviceModel
                 updateSetting('device_model', newModel); // Also persist to settings
+                this.updateStrategyGroupVisibility(); // Update strategy UI
                 Logger.log("Device model changed to:", newModel);
             });
         }
@@ -547,21 +558,21 @@ export class DeviceSettings {
         // Dark Mode
         if (this.darkModeInput) {
             this.darkModeInput.addEventListener('change', () => {
-                updateSetting('dark_mode', this.darkModeInput.checked);
+                updateSetting('darkMode', this.darkModeInput.checked);
             });
         }
 
         // Extended Latin Glyphs (diacritics)
         if (this.extendedLatinGlyphsInput) {
             this.extendedLatinGlyphsInput.addEventListener('change', () => {
-                updateSetting('extended_latin_glyphs', this.extendedLatinGlyphsInput.checked);
+                updateSetting('extendedLatinGlyphs', this.extendedLatinGlyphsInput.checked);
             });
         }
 
         // Inverted Colors (for e-paper displays with swapped black/white)
         if (this.invertedColorsInput) {
             this.invertedColorsInput.addEventListener('change', () => {
-                updateSetting('inverted_colors', this.invertedColorsInput.checked);
+                updateSetting('invertedColors', this.invertedColorsInput.checked);
             });
         }
 
@@ -572,10 +583,10 @@ export class DeviceSettings {
                 radio.addEventListener('change', () => {
                     if (!radio.checked) return;
 
-                    updateSetting('sleep_enabled', !!(this.modeSleep && this.modeSleep.checked));
-                    updateSetting('manual_refresh_only', !!(this.modeManual && this.modeManual.checked));
-                    updateSetting('deep_sleep_enabled', !!(this.modeDeepSleep && this.modeDeepSleep.checked));
-                    updateSetting('daily_refresh_enabled', !!(this.modeDaily && this.modeDaily.checked));
+                    updateSetting('sleepEnabled', !!(this.modeSleep && this.modeSleep.checked));
+                    updateSetting('manualRefreshOnly', !!(this.modeManual && this.modeManual.checked));
+                    updateSetting('deepSleepEnabled', !!(this.modeDeepSleep && this.modeDeepSleep.checked));
+                    updateSetting('dailyRefreshEnabled', !!(this.modeDaily && this.modeDaily.checked));
 
                     this.updateVisibility();
                 });
@@ -585,19 +596,19 @@ export class DeviceSettings {
         // Sleep Times
         if (this.sleepStart) {
             this.sleepStart.addEventListener('change', () => {
-                updateSetting('sleep_start_hour', parseInt(this.sleepStart.value) || 0);
+                updateSetting('sleepStartHour', parseInt(this.sleepStart.value) || 0);
             });
         }
         if (this.sleepEnd) {
             this.sleepEnd.addEventListener('change', () => {
-                updateSetting('sleep_end_hour', parseInt(this.sleepEnd.value) || 0);
+                updateSetting('sleepEndHour', parseInt(this.sleepEnd.value) || 0);
             });
         }
 
         // Daily Refresh Time
         if (this.dailyRefreshTime) {
             this.dailyRefreshTime.addEventListener('change', () => {
-                updateSetting('daily_refresh_time', this.dailyRefreshTime.value);
+                updateSetting('dailyRefreshTime', this.dailyRefreshTime.value);
             });
         }
 
@@ -605,11 +616,11 @@ export class DeviceSettings {
         if (this.deepSleepInterval) {
             this.deepSleepInterval.addEventListener('input', () => {
                 const val = parseInt(this.deepSleepInterval.value) || 600;
-                updateSetting('deep_sleep_interval', val);
+                updateSetting('deepSleepInterval', val);
                 // Sync with global refresh interval if that exists
                 if (this.refreshIntervalInput) {
                     this.refreshIntervalInput.value = val;
-                    AppState.settings.refresh_interval = val;
+                    AppState.updateSettings({ refreshInterval: val });
                 }
             });
         }
@@ -618,11 +629,11 @@ export class DeviceSettings {
         if (this.refreshIntervalInput) {
             this.refreshIntervalInput.addEventListener('input', () => {
                 const val = parseInt(this.refreshIntervalInput.value) || 600;
-                updateSetting('refresh_interval', val);
+                updateSetting('refreshInterval', val);
                 // Sync with deep sleep interval for consistency
                 if (this.deepSleepInterval && (this.modeDeepSleep && this.modeDeepSleep.checked)) {
                     this.deepSleepInterval.value = val;
-                    AppState.settings.deep_sleep_interval = val;
+                    AppState.updateSettings({ deepSleepInterval: val });
                 }
             });
         }
@@ -631,28 +642,69 @@ export class DeviceSettings {
         if (this.noRefreshStart) {
             this.noRefreshStart.addEventListener('change', () => {
                 const val = this.noRefreshStart.value === "" ? null : parseInt(this.noRefreshStart.value);
-                updateSetting('no_refresh_start_hour', val);
+                updateSetting('noRefreshStartHour', val);
             });
         }
         if (this.noRefreshEnd) {
             this.noRefreshEnd.addEventListener('change', () => {
                 const val = this.noRefreshEnd.value === "" ? null : parseInt(this.noRefreshEnd.value);
-                updateSetting('no_refresh_end_hour', val);
+                updateSetting('noRefreshEndHour', val);
             });
         }
 
         // Auto-Cycle
         if (this.autoCycleEnabled) {
             this.autoCycleEnabled.addEventListener('change', () => {
-                updateSetting('auto_cycle_enabled', this.autoCycleEnabled.checked);
+                updateSetting('autoCycleEnabled', this.autoCycleEnabled.checked);
                 this.updateVisibility();
             });
         }
         if (this.autoCycleInterval) {
             this.autoCycleInterval.addEventListener('input', () => {
                 const val = Math.max(5, parseInt(this.autoCycleInterval.value) || 30);
-                updateSetting('auto_cycle_interval_s', val);
+                updateSetting('autoCycleIntervalS', val);
             });
+        }
+
+        // LCD Eco Strategy listeners
+        const lcdStrategyRadios = document.querySelectorAll('input[name="lcdEcoStrategy"]');
+        lcdStrategyRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    updateSetting('lcdEcoStrategy', radio.value);
+                    // Show sleep times row if backlight_off is selected
+                    if (this.sleepRow) {
+                        this.sleepRow.style.display = (radio.value === 'backlight_off') ? 'flex' : 'none';
+                    }
+                }
+            });
+        });
+    }
+
+    updateStrategyGroupVisibility() {
+        const modelId = this.modelInput ? this.modelInput.value : "reterminal_e1001";
+        let isLcd = false;
+
+        if (modelId === 'custom') {
+            const ch = (AppState.project && AppState.project.state && AppState.project.state.customHardware) || {};
+            isLcd = ch.tech === 'lcd';
+        } else {
+            const profiles = window.DEVICE_PROFILES || DEVICE_PROFILES || {};
+            const profile = profiles[modelId];
+            isLcd = !!(profile && profile.features && (profile.features.lcd || profile.features.oled));
+        }
+
+        if (this.strategyEpaperGroup) {
+            this.strategyEpaperGroup.style.display = isLcd ? 'none' : 'flex';
+        }
+        if (this.strategyLcdGroup) {
+            this.strategyLcdGroup.style.display = isLcd ? 'flex' : 'none';
+            // Pre-select the current LCD strategy
+            if (isLcd) {
+                const currentStrategy = AppState.settings.lcdEcoStrategy || 'backlight_off';
+                const radioToSelect = document.querySelector(`input[name="lcdEcoStrategy"][value="${currentStrategy}"]`);
+                if (radioToSelect) radioToSelect.checked = true;
+            }
         }
     }
 

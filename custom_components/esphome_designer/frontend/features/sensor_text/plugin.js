@@ -214,7 +214,75 @@ export default {
     },
 
     render,
+    exportLVGL: (w, { common, convertColor, convertAlign, getLVGLFont, formatOpacity }) => {
+        const p = w.props || {};
+        let entityId = (w.entity_id || "").trim();
+        const entityId2 = (w.entity_id_2 || "").trim();
+        const format = p.value_format || "label_value";
+        let precision = parseInt(p.precision, 10);
+        if (isNaN(precision) || precision < 0) precision = 1;
 
+        const getVarName = (eid) => {
+            if (p.is_local_sensor) return `id(${eid || "battery_level"})`;
+            const safe = eid.replace(/[^a-zA-Z0-9_]/g, "_");
+            if (eid.startsWith("text_sensor.")) return `id(${safe}_txt)`;
+            return `id(${safe})`;
+        };
+
+        if (!entityId && !p.is_local_sensor) return null;
+
+        const v1 = getVarName(entityId);
+        const v2 = entityId2 ? getVarName(entityId2) : null;
+        const isText1 = p.is_text_sensor || (entityId && (entityId.startsWith("text_sensor.") || entityId.startsWith("weather.")));
+        const isText2 = entityId2 && (p.is_text_sensor || entityId2.startsWith("text_sensor.") || entityId2.startsWith("weather."));
+
+        let lambdaStr = '!lambda |-\n';
+        lambdaStr += `          if (${v1}.has_state()${v2 ? ` && ${v2}.has_state()` : ""}) {\n`;
+
+        const unit = p.unit || "";
+        const prefix = p.prefix || "";
+        const postfix = p.postfix || "";
+        const valFmt1 = isText1 ? "%s" : `%.${precision}f`;
+        const valFmt2 = v2 ? (isText2 ? "%s" : `%.${precision}f`) : "";
+        const sep = p.separator || " ~ ";
+
+        let title = (w.title || p.title || "").trim();
+        if (!title && format.startsWith("label_")) {
+            title = entityId.split('.').pop().replace(/_/g, ' ');
+        }
+
+        const arg1 = isText1 ? `${v1}.state.c_str()` : `${v1}.state`;
+        const arg2 = v2 ? (isText2 ? `${v2}.state.c_str()` : `${v2}.state`) : null;
+
+        let finalFmt = "";
+        if (format === "label_only") {
+            finalFmt = title;
+        } else if (format === "label_value" || format === "label_value_no_unit") {
+            finalFmt = `${title}: ${prefix}${valFmt1}${v2 ? sep + valFmt2 : ""}${unit ? " " + unit : ""}${postfix}`;
+        } else if (format === "label_newline_value" || format === "label_newline_value_no_unit") {
+            finalFmt = `${title}\\n${prefix}${valFmt1}${v2 ? sep + valFmt2 : ""}${unit ? " " + unit : ""}${postfix}`;
+        } else if (format === "value_label") {
+            finalFmt = `${prefix}${valFmt1}${v2 ? sep + valFmt2 : ""}${unit ? " " + unit : ""}${postfix} ${title}`;
+        } else {
+            finalFmt = `${prefix}${valFmt1}${v2 ? sep + valFmt2 : ""}${unit ? " " + unit : ""}${postfix}`;
+        }
+
+        lambdaStr += `            return str_sprintf("${finalFmt}", ${arg1}${arg2 ? `, ${arg2}` : ""}).c_str();\n`;
+        lambdaStr += '          }\n';
+        lambdaStr += '          return "---";';
+
+        return {
+            label: {
+                ...common,
+                text: lambdaStr,
+                text_font: getLVGLFont(p.font_family, p.value_font_size || 20, p.font_weight, p.italic),
+                text_color: convertColor(p.color),
+                text_align: (convertAlign(p.text_align) || "LEFT").replace("TOP_", "").replace("BOTTOM_", ""),
+                bg_color: (p.bg_color && p.bg_color !== "transparent") ? convertColor(p.bg_color) : undefined,
+                opa: formatOpacity(p.opa)
+            }
+        };
+    },
     collectRequirements: (w, { addFont }) => {
         const p = w.props || {};
         const family = p.font_family || "Roboto";
@@ -294,17 +362,17 @@ export default {
         const v1 = getVarName(entityId);
         const v2 = entityId2 ? getVarName(entityId2) : null;
 
-        // Determine format string for values
-        const isText = p.is_text_sensor || (entityId && entityId.startsWith("text_sensor."));
-        const valFmt = isText ? "%s" : `%.${precision}f`;
-
+        const isText1 = p.is_text_sensor || (entityId && (entityId.startsWith("text_sensor.") || entityId.startsWith("weather.")));
+        const isText2 = entityId2 && (p.is_text_sensor || entityId2.startsWith("text_sensor.") || entityId2.startsWith("weather."));
+        const valFmt1 = isText1 ? "%s" : `%.${precision}f`;
+        const valFmt2 = isText2 ? "%s" : `%.${precision}f`;
         // Format parts
         let title = (w.title || p.title || "").trim();
         if (!title && (format.startsWith("label_"))) {
             title = entityId.split('.').pop().replace(/_/g, ' '); // Minimal fallback
         }
 
-        const displayUnit = (p.hide_unit || format.endsWith("_no_unit")) ? "" : unit;
+        const displayUnitStr = (p.hide_unit || format.endsWith("_no_unit")) ? "" : unit;
 
         // Alignment Mapping
         const getAlign = (a) => {
@@ -313,61 +381,54 @@ export default {
             return `TextAlign::${a}`;
         };
 
-        const baseAlign = getAlign(textAlign);
         const labelAlign = getAlign(p.label_align || textAlign);
         const valueAlign = getAlign(p.value_align || textAlign);
 
         // Positioning Helpers
-        let x = w.x;
-        let y = w.y;
+        let xVal = w.x;
+        let yVal = w.y;
 
         const isCentered = textAlign.includes("CENTER");
         const isRight = textAlign.includes("RIGHT");
 
-        if (isCentered) x = Math.round(w.x + w.width / 2);
-        else if (isRight) x = Math.round(w.x + w.width);
+        if (isCentered) xVal = Math.round(w.x + w.width / 2);
+        else if (isRight) xVal = Math.round(w.x + w.width);
 
-        if (textAlign.includes("BOTTOM")) y = Math.round(w.y + w.height);
-        else if (!textAlign.includes("TOP")) y = Math.round(w.y + w.height / 2); // Middle
+        if (textAlign.includes("BOTTOM")) yVal = Math.round(w.y + w.height);
+        else if (!textAlign.includes("TOP")) yVal = Math.round(w.y + w.height / 2); // Middle
+
+        // Determine format string for values
+        const finalValFmt = `${prefix}${valFmt1}${v2 ? separator + valFmt2 : ""}${displayUnitStr ? " " + displayUnitStr : ""}${postfix}`;
+
+        const arg1 = isText1 ? `${v1}.state.c_str()` : `${v1}.state`;
+        const arg2 = v2 ? (isText2 ? `${v2}.state.c_str()` : `${v2}.state`) : null;
+        const args = v2 ? `${arg1}, ${arg2}` : arg1;
 
         if (format === "label_only") {
-            lines.push(`        it.printf(${x}, ${y}, id(${labelFontId}), ${color}, ${labelAlign}, "${title}");`);
+            lines.push(`        it.printf(${xVal}, ${yVal}, id(${labelFontId}), ${color}, ${labelAlign}, "${title}");`);
         } else if (format === "value_only" || format === "value_only_no_unit" || !title) {
-            const finalFmt = `${prefix}${valFmt}${v2 ? separator + valFmt : ""}${displayUnit ? " " + displayUnit : ""}${postfix}`;
-            const args = v2 ? `${v1}.state, ${v2}.state` : `${v1}.state`;
-            lines.push(`        it.printf(${x}, ${y}, id(${valueFontId}), ${color}, ${valueAlign}, "${finalFmt}", ${args});`);
+            lines.push(`        it.printf(${xVal}, ${yVal}, id(${valueFontId}), ${color}, ${valueAlign}, "${finalValFmt}", ${args});`);
         } else if (format === "label_value" || format === "label_value_no_unit") {
             // Horizontal layout: [Label:] [Value]
-            // We'll use a small offset for the value if left aligned, or just print together if possible.
-            // Simplified: print as one string if same font, but they use different fonts often.
-            // For now, we print them separately with a heuristic offset.
             const labelStr = `${title}${title.endsWith(":") ? "" : ":"}`;
-            lines.push(`        it.printf(${x}, ${y}, id(${labelFontId}), ${color}, ${labelAlign}, "${labelStr}");`);
+            lines.push(`        it.printf(${xVal}, ${yVal}, id(${labelFontId}), ${color}, ${labelAlign}, "${labelStr}");`);
 
             // Heuristic for value position (label size + some gap)
-            // Ideally we'd measure text, but we can't in lambda easily.
             const offset = Math.round(labelFS * 0.6 * labelStr.length) + 10;
-            const valFmtFull = `${prefix}${valFmt}${v2 ? separator + valFmt : ""}${displayUnit ? " " + displayUnit : ""}${postfix}`;
-            const args = v2 ? `${v1}.state, ${v2}.state` : `${v1}.state`;
+            let valX = xVal + offset;
+            if (isCentered) valX = xVal + offset / 2;
+            else if (isRight) valX = xVal;
 
-            let valX = x + offset;
-            if (isCentered) valX = x + offset / 2; // Rough adjustment
-            else if (isRight) valX = x; // Overlap? Better to just use label_newline_value for cleanliness
-
-            lines.push(`        it.printf(${valX}, ${y}, id(${valueFontId}), ${color}, ${valueAlign}, "${valFmtFull}", ${args});`);
+            lines.push(`        it.printf(${valX}, ${yVal}, id(${valueFontId}), ${color}, ${valueAlign}, "${finalValFmt}", ${args});`);
         } else if (format === "label_newline_value" || format === "label_newline_value_no_unit") {
             // Vertical layout
-            lines.push(`        it.printf(${x}, ${y}, id(${labelFontId}), ${color}, ${labelAlign}, "${title}");`);
-            const valFmtFull = `${prefix}${valFmt}${v2 ? separator + valFmt : ""}${displayUnit ? " " + displayUnit : ""}${postfix}`;
-            const args = v2 ? `${v1}.state, ${v2}.state` : `${v1}.state`;
-            lines.push(`        it.printf(${x}, ${y} + ${labelFS + 4}, id(${valueFontId}), ${color}, ${valueAlign}, "${valFmtFull}", ${args});`);
+            lines.push(`        it.printf(${xVal}, ${yVal}, id(${labelFontId}), ${color}, ${labelAlign}, "${title}");`);
+            lines.push(`        it.printf(${xVal}, ${yVal} + ${labelFS + 4}, id(${valueFontId}), ${color}, ${valueAlign}, "${finalValFmt}", ${args});`);
         } else if (format === "value_label") {
-            const valFmtFull = `${prefix}${valFmt}${v2 ? separator + valFmt : ""}${displayUnit ? " " + displayUnit : ""}${postfix}`;
-            const args = v2 ? `${v1}.state, ${v2}.state` : `${v1}.state`;
-            lines.push(`        it.printf(${x}, ${y}, id(${valueFontId}), ${color}, ${valueAlign}, "${valFmtFull}", ${args});`);
+            lines.push(`        it.printf(${xVal}, ${yVal}, id(${valueFontId}), ${color}, ${valueAlign}, "${finalValFmt}", ${args});`);
 
             const offset = Math.round(valueFS * 0.6 * 6) + 10; // Guessed value width
-            lines.push(`        it.printf(${x} + ${offset}, ${y}, id(${labelFontId}), ${color}, ${labelAlign}, "${title}");`);
+            lines.push(`        it.printf(${xVal} + ${offset}, ${yVal}, id(${labelFontId}), ${color}, ${labelAlign}, "${title}");`);
         }
 
         if (cond) lines.push(`        }`);

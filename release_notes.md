@@ -21,6 +21,7 @@
 - **Inline Text Editing**: Double-click any text widget on the canvas to edit it instantly.
 - **Advanced Multi-Selection**: Full synchronization between Canvas, Hierarchy View, and YAML Editor.
 - **Drop Shadow Tool**: One-click "Create Drop Shadow" for shapes.
+- **Hardware-Aware Energy Strategies**: The "Power & Refresh Strategy" section now dynamically adapts to your display technology. LCD and OLED devices now feature specific "Always On", "Backlight Off Schedule", and "Ultra Eco" strategies that switch automatically based on the selected hardware profile.
 
 ### 🐛 Bug Fixes & Improvements
 - **Viewport Scrollbar Cleanup:** Disabled conflicting native scrollbars in favor of 100% transform-based panning for smoother navigation.

@@ -79,7 +79,49 @@ export class WidgetFactory {
             props: {}
         };
 
-        // Try to get defaults from PluginRegistry first
+        // Check for special presets first (these override generic plugin defaults)
+        switch (type) {
+            case "nav_next_page":
+                widget.props = {
+                    title: "Next",
+                    color: "rgba(0, 128, 255, 0.2)",
+                    border_color: "#0080ff",
+                    nav_action: "next_page",
+                    icon: "F0142",
+                    icon_size: 48
+                };
+                widget.width = 80;
+                widget.height = 80;
+                return widget;
+
+            case "nav_previous_page":
+                widget.props = {
+                    title: "Previous",
+                    color: "rgba(0, 128, 255, 0.2)",
+                    border_color: "#0080ff",
+                    nav_action: "previous_page",
+                    icon: "F0141",
+                    icon_size: 48
+                };
+                widget.width = 80;
+                widget.height = 80;
+                return widget;
+
+            case "nav_reload_page":
+                widget.props = {
+                    title: "Reload",
+                    color: "rgba(0, 128, 255, 0.2)",
+                    border_color: "#0080ff",
+                    nav_action: "reload_page",
+                    icon: "F0450",
+                    icon_size: 48
+                };
+                widget.width = 80;
+                widget.height = 80;
+                return widget;
+        }
+
+        // Try to get defaults from PluginRegistry
         const plugin = PluginRegistry.get(type);
         if (plugin && plugin.defaults) {
             widget.props = { ...plugin.defaults };
@@ -105,7 +147,6 @@ export class WidgetFactory {
             if (plugin.height) widget.height = plugin.height;
 
             // NEW: Also check plugin.defaults for width/height as some plugins define them there
-            // NEW: Also check plugin.defaults for width/height as some plugins define them there
             if (plugin.defaults.width) widget.width = plugin.defaults.width;
             if (plugin.defaults.height) widget.height = plugin.defaults.height;
             if (plugin.defaults.w) widget.width = plugin.defaults.w;
@@ -114,49 +155,8 @@ export class WidgetFactory {
             return widget;
         }
 
-        // Fallback to hardcoded switch for special presets or aliases not in registry
+        // Fallback or remaining special cases
         switch (type) {
-            case "nav_next_page":
-                widget.type = "touch_area";
-                widget.props = {
-                    title: "Next",
-                    color: "rgba(0, 128, 255, 0.2)",
-                    border_color: "#0080ff",
-                    nav_action: "next_page",
-                    icon: "F0142",
-                    icon_size: 48
-                };
-                widget.width = 80;
-                widget.height = 80;
-                break;
-
-            case "nav_previous_page":
-                widget.type = "touch_area";
-                widget.props = {
-                    title: "Previous",
-                    color: "rgba(0, 128, 255, 0.2)",
-                    border_color: "#0080ff",
-                    nav_action: "previous_page",
-                    icon: "F0141",
-                    icon_size: 48
-                };
-                widget.width = 80;
-                widget.height = 80;
-                break;
-
-            case "nav_reload_page":
-                widget.type = "touch_area";
-                widget.props = {
-                    title: "Reload",
-                    color: "rgba(0, 128, 255, 0.2)",
-                    border_color: "#0080ff",
-                    nav_action: "reload_page",
-                    icon: "F0450",
-                    icon_size: 48
-                };
-                widget.width = 80;
-                widget.height = 80;
-                break;
         }
 
         // Apply grid cell defaults to all LVGL widgets

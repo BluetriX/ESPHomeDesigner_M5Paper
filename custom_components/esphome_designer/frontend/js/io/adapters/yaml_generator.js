@@ -71,7 +71,15 @@ export class YamlGenerator {
         lines.push(`# Orientation: ${layout.orientation || "landscape"}`);
         lines.push(`# Dark Mode: ${layout.darkMode ? "enabled" : "disabled"}`);
         lines.push(`# Refresh Interval: ${layout.refreshInterval || 600}`);
-        const strategy = layout.deepSleepEnabled ? "Ultra Eco (Deep Sleep)" : (layout.sleepEnabled ? "Eco (Light Sleep)" : "Always On");
+        const isLcd = !!(profile.features && (profile.features.lcd || profile.features.oled));
+        let strategy;
+        if (isLcd) {
+            const lcdStrategy = layout.lcdEcoStrategy || 'backlight_off';
+            const map = { always_on: 'Always On', backlight_off: 'Backlight Off Schedule', halt_updates: 'Halt Updates', deep_sleep: 'Deep Sleep' };
+            strategy = map[lcdStrategy] || lcdStrategy;
+        } else {
+            strategy = layout.deepSleepEnabled ? "Ultra Eco (Deep Sleep)" : (layout.sleepEnabled ? "Eco (Light Sleep)" : "Always On");
+        }
         lines.push(`# Power Strategy: ${strategy}`);
         lines.push(`# Deep Sleep Interval: ${layout.deepSleepInterval || 600}`);
         lines.push("# ====================================");
@@ -89,7 +97,7 @@ export class YamlGenerator {
     generateScriptSection(payload, pages, profile) {
         const lines = [];
         const displayId = profile.features?.lcd ? "my_display" : "epaper_display";
-        const autoCycleEnabled = payload.auto_cycle_enabled && pages.length > 1;
+        const autoCycleEnabled = payload.autoCycleEnabled && pages.length > 1;
 
         lines.push("script:");
 
@@ -103,9 +111,19 @@ export class YamlGenerator {
         lines.push("          int target = target_page;");
         lines.push("          while (target < 0) target += pages_count;");
         lines.push("          target %= pages_count;");
+        lines.push("");
+        lines.push("          // Debounce: Ignore page changes within 3000ms of last change");
+        lines.push("          // (e-paper display update takes ~1.6s, so we need a longer debounce)");
+        lines.push("          uint32_t now = millis();");
+        lines.push("          if (now - id(last_page_switch_time) < 3000) {");
+        lines.push(`            ESP_LOGD("display", "Page change ignored (debounce), last switch was %d ms ago", now - id(last_page_switch_time));`);
+        lines.push("            return;");
+        lines.push("          }");
+        lines.push("");
         lines.push("          if (id(display_page) != target) {");
+        lines.push("            // Set debounce time BEFORE display update (update takes ~1.6s)");
+        lines.push("            id(last_page_switch_time) = now;");
         lines.push("            id(display_page) = target;");
-        lines.push("            id(last_page_switch_time) = millis();");
         lines.push(`            id(${displayId}).update();`);
         lines.push(`            ESP_LOGI("display", "Switched to page %d", target);`);
         lines.push("            // Restart refresh logic");
@@ -128,7 +146,7 @@ export class YamlGenerator {
 
         // Auto Cycle Timer
         if (autoCycleEnabled) {
-            const interval = payload.auto_cycle_interval_s || 30;
+            const interval = payload.autoCycleIntervalS || 30;
             lines.push("  - id: auto_cycle_timer", "    mode: restart", "    then:");
             lines.push(`      - delay: ${interval}s`);
             lines.push("      - script.execute:");

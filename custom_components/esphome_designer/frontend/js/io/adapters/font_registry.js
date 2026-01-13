@@ -40,21 +40,20 @@ export class FontRegistry {
         this.definedFontIds.add(id);
 
         if (family === "Material Design Icons") {
-            this.fontLines.push(`  - file: "fonts/materialdesignicons-webfont.ttf"`);
-            this.fontLines.push(`    id: ${id}`);
-            this.fontLines.push(`    size: ${size}`);
-            // Glyphs for icons are added in getLines()
+            // We just register the ID, glyphs are handled in getLines()
         } else {
-            this.fontLines.push(`  - file:`);
-            this.fontLines.push(`      type: gfonts`);
-            this.fontLines.push(`      family: ${family}`);
-            this.fontLines.push(`      weight: ${weightNum}`);
-            if (italic) this.fontLines.push(`      italic: true`);
-            this.fontLines.push(`    id: ${id}`);
-            this.fontLines.push(`    size: ${size}`);
-
-            const glyphs = this.EXTENDED_GLYPHS.map(g => `"${g}"`).join(", ");
-            this.fontLines.push(`    glyphs: [${glyphs}]`);
+            const fontDef = {
+                id,
+                file: {
+                    type: "gfonts",
+                    family: family,
+                    weight: weightNum,
+                    italic: italic
+                },
+                size: size,
+                glyphs: [...this.EXTENDED_GLYPHS]
+            };
+            this.fontLines.push(fontDef);
         }
 
         return id;
@@ -91,33 +90,28 @@ export class FontRegistry {
      */
     getLines() {
         // Fallback font if none registered
-        if (this.fontLines.length === 0) {
+        if (this.definedFontIds.size === 0) {
             this.addFont("Roboto", 400, 20);
         }
 
         const lines = ["font:"];
-        lines.push(...this.fontLines);
 
-        // Add icons tracking to their respective icon fonts
+        // 1. Regular Fonts
+        this.fontLines.forEach(f => {
+            lines.push(`  - file:`);
+            lines.push(`      type: ${f.file.type}`);
+            lines.push(`      family: ${f.file.family}`);
+            lines.push(`      weight: ${f.file.weight}`);
+            if (f.file.italic) lines.push(`      italic: true`);
+            lines.push(`    id: ${f.id}`);
+            lines.push(`    size: ${f.size}`);
+            const glyphs = f.glyphs.map(g => `"${g}"`).join(", ");
+            lines.push(`    glyphs: [${glyphs}]`);
+        });
+
+        // 2. Icon Fonts - Corrected to use the expected IDs
         for (const [size, codes] of this.iconCodesBySize.entries()) {
-            // Find if there's already an icon font of this size
-            const iconFontId = `font_material_design_icons_400_${size}`;
-            if (!this.definedFontIds.has(iconFontId)) {
-                this.addFont("Material Design Icons", 400, size);
-            }
-
-            // This is slightly complex because fontLines already has the base font entry.
-            // We need to find the specific font entry and add glyphs.
-            // Simplified: we add a separate font entry for icons to avoid editing strings.
-            // But optimal YAML would merge them.
-            // For now, let's just ensure glyphs are included.
-            // Actually, we can just append them if iconCodesBySize has codes for this size.
-        }
-
-        // Refined approach: add icon fonts explicitly at the end if they have tracked codes
-        for (const [size, codes] of this.iconCodesBySize.entries()) {
-            const fontId = `icon_font_${size}`;
-            if (this.definedFontIds.has(fontId)) continue; // Already added?
+            const fontId = `font_material_design_icons_400_${size}`;
 
             lines.push(`  - file: "fonts/materialdesignicons-webfont.ttf"`);
             lines.push(`    id: ${fontId}`);

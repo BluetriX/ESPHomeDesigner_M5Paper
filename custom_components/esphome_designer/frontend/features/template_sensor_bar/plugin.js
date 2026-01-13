@@ -254,6 +254,80 @@ const exportDoc = (w, context) => {
     if (cond) lines.push(`        }`);
 };
 
+const onExportNumericSensors = (context) => {
+    const { lines, widgets, profile } = context;
+    const barWidgets = widgets.filter(w => w.type === "template_sensor_bar");
+    if (barWidgets.length === 0) return;
+
+    let wifiNeeded = false;
+    let tempNeeded = false;
+    let humNeeded = false;
+    let batNeeded = false;
+
+    barWidgets.forEach(w => {
+        const p = w.props || {};
+        if (p.show_wifi !== false) wifiNeeded = true;
+        if (p.show_temperature !== false) tempNeeded = true;
+        if (p.show_humidity !== false) humNeeded = true;
+        if (p.show_battery !== false) batNeeded = true;
+    });
+
+    if (wifiNeeded && !lines.some(l => l.includes("id: wifi_signal_dbm"))) {
+        lines.push("- platform: wifi_signal");
+        lines.push("  id: wifi_signal_dbm");
+        lines.push("  update_interval: 60s");
+        lines.push("  internal: true");
+    }
+
+    if (tempNeeded || humNeeded) {
+        const shtId = profile.features?.sht4x ? "sht4x_sensor" : (profile.features?.sht3x ? "sht3x_sensor" : "shtc3_sensor");
+        const shtPlatform = profile.features?.sht4x ? "sht4x" : (profile.features?.sht3x ? "sht3x" : "shtc3");
+
+        if (!lines.some(l => l.includes(`id: ${shtId}`))) {
+            lines.push(`- platform: ${shtPlatform}`);
+            lines.push(`  id: ${shtId}`);
+            if (tempNeeded) {
+                const tempId = profile.features?.sht4x ? "sht4x_temperature" : (profile.features?.sht3x ? "sht3x_temperature" : "shtc3_temperature");
+                lines.push("  temperature:");
+                lines.push(`    id: ${tempId}`);
+                lines.push("    internal: true");
+            }
+            if (humNeeded) {
+                const humId = profile.features?.sht4x ? "sht4x_humidity" : (profile.features?.sht3x ? "sht3x_humidity" : "shtc3_humidity");
+                lines.push("  humidity:");
+                lines.push(`    id: ${humId}`);
+                lines.push("    internal: true");
+            }
+            lines.push("  update_interval: 60s");
+        }
+    }
+
+    if (batNeeded && !lines.some(l => l.includes("id: battery_level"))) {
+        // Fallback for devices where battery is not auto-defined by hardware generators
+        lines.push("- platform: template");
+        lines.push("  id: battery_level");
+        lines.push("  name: \"Battery Level\"");
+        lines.push("  unit_of_measurement: '%'");
+        lines.push("  update_interval: 60s");
+        lines.push("  internal: true");
+    }
+};
+
+const collectRequirements = (widget, context) => {
+    const { trackIcon, addFont } = context;
+    const p = widget.props || {};
+    const iconSize = parseInt(p.icon_size || 20, 10);
+    const fontSize = parseInt(p.font_size || 14, 10);
+
+    addFont("Material Design Icons", 400, iconSize);
+    addFont("Roboto", 500, fontSize);
+
+    if (p.show_wifi !== false) ["F092B", "F091F", "F0922", "F0925", "F0928"].forEach(c => trackIcon(c, iconSize));
+    if (p.show_temperature !== false) ["F050F"].forEach(c => trackIcon(c, iconSize));
+    if (p.show_humidity !== false) ["F058E"].forEach(c => trackIcon(c, iconSize));
+    if (p.show_battery !== false) ["F0082", "F0079", "F007E", "F007B", "F0083"].forEach(c => trackIcon(c, iconSize));
+};
+
 export default {
     id: "template_sensor_bar",
     name: "Sensor Bar",
@@ -273,6 +347,111 @@ export default {
         icon_size: 20
     },
     render,
-    export: exportDoc
+    exportLVGL: (w, { common, convertColor, getLVGLFont, profile }) => {
+        const p = w.props || {};
+        const color = convertColor(p.color || "white");
+        const iconSize = parseInt(p.icon_size || 20, 10);
+        const fontSize = parseInt(p.font_size || 14, 10);
+        const showWifi = p.show_wifi !== false;
+        const showTemp = p.show_temperature !== false;
+        const showHum = p.show_humidity !== false;
+        const showBat = p.show_battery !== false;
+
+        const iconFont = getLVGLFont("Material Design Icons", iconSize, 400);
+        const textFont = getLVGLFont("Roboto", fontSize, 500);
+
+        const widgets = [];
+
+        if (showWifi) {
+            let iconL = '!lambda |-\n';
+            iconL += '              if (id(wifi_signal_dbm).has_state()) {\n';
+            iconL += '                float sig = id(wifi_signal_dbm).state;\n';
+            iconL += '                if (sig >= -50) return "\\U000F0928";\n';
+            iconL += '                else if (sig >= -70) return "\\U000F0925";\n';
+            iconL += '                else if (sig >= -85) return "\\U000F0922";\n';
+            iconL += '                else return "\\U000F091F";\n';
+            iconL += '              }\n';
+            iconL += '              return "\\U000F092B";';
+
+            widgets.push({
+                obj: {
+                    width: "SIZE_CONTENT", height: "SIZE_CONTENT", bg_opa: "TRANSP", border_width: 0,
+                    layout: "FLEX", flex_flow: "ROW", flex_align_main: "CENTER", flex_align_cross: "CENTER",
+                    pad_all: 0, widgets: [
+                        { label: { text: iconL, text_font: iconFont, text_color: color } },
+                        { label: { text: '!lambda "return id(wifi_signal_dbm).has_state() ? str_sprintf(\'%.0fdB\', id(wifi_signal_dbm).state).c_str() : \'--dB\';"', text_font: textFont, text_color: color, x: 4 } }
+                    ]
+                }
+            });
+        }
+
+        if (showTemp) {
+            const tempId = profile.features?.sht4x ? "sht4x_temperature" : (profile.features?.sht3x ? "sht3x_temperature" : "shtc3_temperature");
+            const unit = p.unit || "°C";
+            let tempExpr = `id(${tempId}).state`;
+            if (unit === "°F") tempExpr = `(${tempId}.state * 9.0 / 5.0 + 32.0)`;
+
+            widgets.push({
+                obj: {
+                    width: "SIZE_CONTENT", height: "SIZE_CONTENT", bg_opa: "TRANSP", border_width: 0,
+                    layout: "FLEX", flex_flow: "ROW", flex_align_main: "CENTER", flex_align_cross: "CENTER",
+                    pad_all: 0, widgets: [
+                        { label: { text: '"\\U000F050F"', text_font: iconFont, text_color: color } },
+                        { label: { text: `!lambda "return id(${tempId}).has_state() ? str_sprintf(\'%.1f${unit}\', ${tempExpr}).c_str() : \'--${unit}\';"`, text_font: textFont, text_color: color, x: 4 } }
+                    ]
+                }
+            });
+        }
+
+        if (showHum) {
+            const humId = profile.features?.sht4x ? "sht4x_humidity" : (profile.features?.sht3x ? "sht3x_humidity" : "shtc3_humidity");
+            widgets.push({
+                obj: {
+                    width: "SIZE_CONTENT", height: "SIZE_CONTENT", bg_opa: "TRANSP", border_width: 0,
+                    layout: "FLEX", flex_flow: "ROW", flex_align_main: "CENTER", flex_align_cross: "CENTER",
+                    pad_all: 0, widgets: [
+                        { label: { text: '"\\U000F058E"', text_font: iconFont, text_color: color } },
+                        { label: { text: `!lambda "return id(${humId}).has_state() ? str_sprintf(\'%.0f%%\', id(${humId}).state).c_str() : \'--%\';"`, text_font: textFont, text_color: color, x: 4 } }
+                    ]
+                }
+            });
+        }
+
+        if (showBat) {
+            let batIconL = '!lambda |-\n';
+            batIconL += '              float lvl = id(battery_level).state;\n';
+            batIconL += '              if (lvl >= 90) return "\\U000F0079";\n';
+            batIconL += '              else if (lvl >= 50) return "\\U000F007E";\n';
+            batIconL += '              else if (lvl >= 20) return "\\U000F007B";\n';
+            batIconL += '              else return "\\U000F0083";';
+
+            widgets.push({
+                obj: {
+                    width: "SIZE_CONTENT", height: "SIZE_CONTENT", bg_opa: "TRANSP", border_width: 0,
+                    layout: "FLEX", flex_flow: "ROW", flex_align_main: "CENTER", flex_align_cross: "CENTER",
+                    pad_all: 0, widgets: [
+                        { label: { text: batIconL, text_font: iconFont, text_color: color } },
+                        { label: { text: '!lambda "return id(battery_level).has_state() ? str_sprintf(\'%.0f%%\', id(battery_level).state).c_str() : \'--%\';"', text_font: textFont, text_color: color, x: 4 } }
+                    ]
+                }
+            });
+        }
+
+        return {
+            obj: {
+                ...common,
+                bg_color: p.show_background !== false ? convertColor(p.background_color || "black") : "TRANSP",
+                bg_opa: p.show_background !== false ? "COVER" : "TRANSP",
+                radius: p.border_radius || 8,
+                border_width: p.border_thickness || 0,
+                border_color: convertColor(p.border_color || "white"),
+                layout: { type: "FLEX", flex_flow: "ROW", flex_align_main: "SPACE_AROUND", flex_align_cross: "CENTER" },
+                widgets: widgets
+            }
+        };
+    },
+    export: exportDoc,
+    onExportNumericSensors,
+    collectRequirements
 };
 

@@ -115,6 +115,34 @@ export class ProjectStore {
     }
 
     /**
+     * @param {number|null} atIndex 
+     */
+    addPage(atIndex = null) {
+        const newIdNum = this.state.pages.length;
+        // Generate a truly unique ID if possible, but keeping consistency with current pattern
+        const newPage = {
+            id: `page_${Date.now()}_${newIdNum}`,
+            name: `Page ${newIdNum + 1}`,
+            widgets: []
+        };
+
+        const targetIndex = (atIndex !== null) ? atIndex : this.state.pages.length;
+        this.state.pages.splice(targetIndex, 0, newPage);
+
+        // If we inserted before or at current index, update current index
+        if (atIndex !== null && atIndex <= this.state.currentPageIndex) {
+            this.state.currentPageIndex++;
+        } else if (atIndex === null) {
+            this.state.currentPageIndex = this.state.pages.length - 1;
+        }
+
+        this.rebuildWidgetsIndex();
+        emit(EVENTS.STATE_CHANGED);
+        emit(EVENTS.PAGE_CHANGED, { index: this.state.currentPageIndex });
+        return newPage;
+    }
+
+    /**
      * @param {number} index 
      */
     deletePage(index) {

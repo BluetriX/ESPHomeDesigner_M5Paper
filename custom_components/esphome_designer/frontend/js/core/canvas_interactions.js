@@ -4,7 +4,7 @@ import { emit, EVENTS } from './events.js';
 import { WidgetFactory } from './widget_factory.js';
 import { registry as PluginRegistry } from './plugin_registry.js';
 import { snapToGridCell, applySnapToPosition, clearSnapGuides, updateWidgetGridCell } from './canvas_snap.js';
-import { render, applyZoom, updateWidgetDOM } from './canvas_renderer.js';
+import { render, applyZoom, updateWidgetDOM, focusPage } from './canvas_renderer.js';
 
 // Helper for manual double-click detection
 let lastClickTime = 0;
@@ -94,19 +94,25 @@ export function setupInteractions(canvasInstance) {
 
         clearSnapGuides(); // Clean up any stale guides immediately
 
-        const artboardEl = ev.target.closest(".artboard");
-        if (!artboardEl) {
-            // Clicked on stage background - release focus from inputs (e.g. YAML box)
-            if (document.activeElement) document.activeElement.blur();
+        const wrapperEl = ev.target.closest(".artboard-wrapper");
+        if (!wrapperEl || ev.target.closest(".artboard-btn") || ev.target.closest("button")) {
+            // Clicked on stage background OR a button - release focus from inputs
+            if (document.activeElement && !ev.target.closest("button")) document.activeElement.blur();
             return;
         }
 
-        const pageIndex = parseInt(artboardEl.dataset.index, 10);
+        const pageIndex = parseInt(wrapperEl.dataset.index, 10);
+        const artboardEl = wrapperEl.querySelector(".artboard");
         let currentArtboardEl = artboardEl;
         const widgetEl = ev.target.closest(".widget");
         let activeWidgetId = widgetEl?.dataset.id;
 
-        if (AppState.currentPageIndex !== pageIndex) {
+        // If switching pages OR clicking an empty area/header of the current page, focus it
+        const isSwitching = AppState.currentPageIndex !== pageIndex;
+        const isHeaderClick = !!ev.target.closest(".artboard-header");
+        const isBackgroundClick = !!ev.target.closest(".artboard") && !widgetEl;
+
+        if (isSwitching) {
             // Store selection before switching
             const prevSelection = [...AppState.selectedWidgetIds];
             AppState.setCurrentPageIndex(pageIndex, { suppressFocus: true });
@@ -116,9 +122,15 @@ export function setupInteractions(canvasInstance) {
                 AppState.selectWidgets(prevSelection.includes(activeWidgetId) ? prevSelection : [activeWidgetId]);
             }
 
+            // Centralize focus on the new page
+            focusPage(canvasInstance, pageIndex, true);
+
             // Re-query artboard after potential re-render
             const newArtboard = canvasInstance.canvas.querySelector(`.artboard[data-index="${pageIndex}"]`);
             if (newArtboard) currentArtboardEl = newArtboard;
+        } else if (isHeaderClick || isBackgroundClick) {
+            // Re-center current page if header or background clicked
+            focusPage(canvasInstance, pageIndex, true);
         }
 
         const rect = currentArtboardEl.getBoundingClientRect();
@@ -344,6 +356,8 @@ export function onMouseMove(ev, canvasInstance) {
             canvasInstance.lassoEl.style.width = w + "px";
             canvasInstance.lassoEl.style.height = h + "px";
         }
+        ev.preventDefault();
+        ev.stopPropagation();
     }
 }
 
@@ -468,6 +482,8 @@ export function onMouseUp(ev, canvasInstance) {
 
         canvasInstance.lassoState = null;
         render(canvasInstance);
+        ev.preventDefault();
+        ev.stopPropagation();
     }
 }
 
