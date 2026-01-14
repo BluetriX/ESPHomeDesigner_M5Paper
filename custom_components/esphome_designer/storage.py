@@ -38,15 +38,39 @@ class DashboardStorage:
     async def async_load(self) -> None:
         """Load state from disk into memory."""
         data = await self._store.async_load()
+        
+        # MIGRATION: If new storage is empty, check for legacy 0.8.6.2 storage
+        if not data:
+            _LOGGER.debug("%s: No new state found, checking for legacy 'reterminal_dashboard' storage", DOMAIN)
+            # Legacy store uses exact same format but different key
+            legacy_store = Store(self._hass, 1, "reterminal_dashboard")
+            legacy_data = await legacy_store.async_load()
+            
+            if legacy_data:
+                _LOGGER.info("%s: Found legacy 0.8.6.2 layouts, migrating to %s...", DOMAIN, DOMAIN)
+                data = legacy_data
+                # We will save this to the new store automatically on next save, 
+                # or we can force it immediately below. For safety, let's just use it as 'data'.
+
         if data:
             try:
                 self._state = DashboardState.from_dict(data)
                 _LOGGER.debug("%s: Loaded dashboard state from storage", DOMAIN)
+                
+                # If we just loaded legacy data (and thus self._state is dirty relative to new store),
+                # we should probably persist it to the new store soon.
+                # However, to avoid side effects during load, we'll let the user's first action 
+                # (or auto-save on change) trigger the save. 
+                # But actually, if they never change anything, they might lose it?
+                # Let's force a save if we see it was a migration? 
+                # No, async_load is often called at startup. Calling async_save here might be risky 
+                # if the loop isn't ready or if it causes a loop. 
+                # Safe approach: Just load it into memory. It will be saved when they make a change.
             except Exception as exc:  # noqa: BLE001
                 _LOGGER.error("%s: Failed to parse stored state, starting fresh: %s", DOMAIN, exc)
                 self._state = DashboardState()
         else:
-            _LOGGER.debug("%s: No existing state found, starting fresh", DOMAIN)
+            _LOGGER.debug("%s: No storage found (new or legacy), starting fresh", DOMAIN)
             self._state = DashboardState()
 
     async def async_save(self) -> None:

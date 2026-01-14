@@ -409,17 +409,9 @@ export default {
         } else if (format === "value_only" || format === "value_only_no_unit" || !title) {
             lines.push(`        it.printf(${xVal}, ${yVal}, id(${valueFontId}), ${color}, ${valueAlign}, "${finalValFmt}", ${args});`);
         } else if (format === "label_value" || format === "label_value_no_unit") {
-            // Horizontal layout: [Label:] [Value]
-            const labelStr = `${title}${title.endsWith(":") ? "" : ":"}`;
-            lines.push(`        it.printf(${xVal}, ${yVal}, id(${labelFontId}), ${color}, ${labelAlign}, "${labelStr}");`);
-
-            // Heuristic for value position (label size + some gap)
-            const offset = Math.round(labelFS * 0.6 * labelStr.length) + 10;
-            let valX = xVal + offset;
-            if (isCentered) valX = xVal + offset / 2;
-            else if (isRight) valX = xVal;
-
-            lines.push(`        it.printf(${valX}, ${yVal}, id(${valueFontId}), ${color}, ${valueAlign}, "${finalValFmt}", ${args});`);
+            // Horizontal layout: "Label: Value" using single printf for perfect alignment
+            const labelStr = `${title}${title.endsWith(":") ? "" : ":"} `;
+            lines.push(`        it.printf(${xVal}, ${yVal}, id(${valueFontId}), ${color}, ${valueAlign}, "${labelStr}${finalValFmt}", ${args});`);
         } else if (format === "label_newline_value" || format === "label_newline_value_no_unit") {
             // Vertical layout
             lines.push(`        it.printf(${xVal}, ${yVal}, id(${labelFontId}), ${color}, ${labelAlign}, "${title}");`);

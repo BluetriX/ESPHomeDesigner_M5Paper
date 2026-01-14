@@ -965,6 +965,13 @@ export class PropertiesPanel {
             this.addCheckbox("Show Battery", props.show_battery !== false, (v) => updateProp("show_battery", v));
             this.endSection();
 
+            this.createSection("Sensor Data Sources", false);
+            this.addLabeledInput("WiFi Entity", "text", props.wifi_entity || "", (v) => updateProp("wifi_entity", v));
+            this.addLabeledInput("Temp Entity", "text", props.temp_entity || "", (v) => updateProp("temp_entity", v));
+            this.addLabeledInput("Hum Entity", "text", props.hum_entity || "", (v) => updateProp("hum_entity", v));
+            this.addLabeledInput("Battery Entity", "text", props.bat_entity || "", (v) => updateProp("bat_entity", v));
+            this.endSection();
+
             this.createSection("Appearance", false);
             this.addCheckbox("Show Background", props.show_background !== false, (v) => updateProp("show_background", v));
             if (props.show_background !== false) {

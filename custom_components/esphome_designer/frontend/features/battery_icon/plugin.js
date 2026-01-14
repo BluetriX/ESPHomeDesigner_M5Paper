@@ -79,7 +79,7 @@ const exportDoc = (w, context) => {
     if (p.is_local_sensor) {
         sensorId = "battery_level";
     } else {
-        sensorId = entityId ? entityId.replace(/^sensor\./, "").replace(/\./g, "_").replace(/-/g, "_") : "battery_level";
+        sensorId = entityId ? entityId.replace(/[^a-zA-Z0-9_]/g, "_") : "battery_level";
     }
 
     lines.push(`        // widget:battery_icon id:${w.id} type:battery_icon x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId || "battery_level"} size:${size} font_size:${fontSize} color:${colorProp} local:${!!p.is_local_sensor} ${getCondProps(w)}`);

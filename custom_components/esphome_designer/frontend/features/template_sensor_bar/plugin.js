@@ -48,7 +48,7 @@ const render = (el, widget, { getColorStyle }) => {
     const getEntityState = (possibleIds) => {
         if (!window.AppState || !window.AppState.entityStates) return null;
         for (const id of possibleIds) {
-            if (window.AppState.entityStates[id]) return window.AppState.entityStates[id].state;
+            if (id && window.AppState.entityStates[id]) return window.AppState.entityStates[id].state;
         }
         return null;
     };
@@ -56,7 +56,7 @@ const render = (el, widget, { getColorStyle }) => {
     const sensors = [];
 
     if (props.show_wifi) {
-        const state = getEntityState(['wifi_signal_dbm', 'sensor.wifi_signal']);
+        const state = getEntityState([props.wifi_entity, 'wifi_signal_dbm', 'sensor.wifi_signal']);
         sensors.push({
             type: 'wifi',
             icon: 'F0928',
@@ -65,7 +65,7 @@ const render = (el, widget, { getColorStyle }) => {
     }
 
     if (props.show_temperature) {
-        const state = getEntityState(['sht4x_temperature', 'sht3x_temperature', 'shtc3_temperature', 'sensor.temperature']);
+        const state = getEntityState([props.temp_entity, 'sht4x_temperature', 'sht3x_temperature', 'shtc3_temperature', 'sensor.temperature']);
         sensors.push({
             type: 'temp',
             icon: 'F050F',
@@ -74,7 +74,7 @@ const render = (el, widget, { getColorStyle }) => {
     }
 
     if (props.show_humidity) {
-        const state = getEntityState(['sht4x_humidity', 'sht3x_humidity', 'shtc3_humidity', 'sensor.humidity']);
+        const state = getEntityState([props.hum_entity, 'sht4x_humidity', 'shtc3_humidity', 'sensor.humidity']);
         sensors.push({
             type: 'hum',
             icon: 'F058E',
@@ -83,7 +83,7 @@ const render = (el, widget, { getColorStyle }) => {
     }
 
     if (props.show_battery) {
-        const state = getEntityState(['battery_level', 'sensor.battery_level']);
+        const state = getEntityState([props.bat_entity, 'battery_level', 'sensor.battery_level']);
         sensors.push({
             type: 'bat',
             icon: 'F0079',
@@ -140,10 +140,16 @@ const exportDoc = (w, context) => {
     const thickness = parseInt(p.border_thickness || 0, 10);
     const borderColor = getColorConst(p.border_color || "white");
 
+    // Entity IDs
+    const wifiId = (p.wifi_entity || "wifi_signal_dbm").replace(/[^a-zA-Z0-9_]/g, "_");
+    const batId = (p.bat_entity || "battery_level").replace(/[^a-zA-Z0-9_]/g, "_");
+    const humId = (p.hum_entity || (profile.features?.sht4x ? "sht4x_humidity" : (profile.features?.sht3x ? "sht3x_humidity" : "shtc3_humidity"))).replace(/[^a-zA-Z0-9_]/g, "_");
+    const tempId = (p.temp_entity || (profile.features?.sht4x ? "sht4x_temperature" : (profile.features?.sht3x ? "sht3x_temperature" : "shtc3_temperature"))).replace(/[^a-zA-Z0-9_]/g, "_");
+
     const iconFontRef = addFont("Material Design Icons", 400, iconSize);
     const textFontRef = addFont("Roboto", 500, fontSize);
 
-    lines.push(`        // widget:template_sensor_bar id:${w.id} type:template_sensor_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} wifi:${showWifi} temp:${showTemp} hum:${showHum} bat:${showBat} bg:${showBg} bg_color:${p.background_color || "black"} radius:${radius} border:${thickness} icon_size:${iconSize} font_size:${fontSize} color:${colorProp} ${getCondProps(w)}`);
+    lines.push(`        // widget:template_sensor_bar id:${w.id} type:template_sensor_bar x:${w.x} y:${w.y} w:${w.width} h:${w.height} wifi:${showWifi} temp:${showTemp} hum:${showHum} bat:${showBat} bg:${showBg} bg_color:${p.background_color || "black"} radius:${radius} border:${thickness} icon_size:${iconSize} font_size:${fontSize} color:${colorProp} wifi_ent:"${p.wifi_entity || ""}" temp_ent:"${p.temp_entity || ""}" hum_ent:"${p.hum_entity || ""}" bat_ent:"${p.bat_entity || ""}" ${getCondProps(w)}`);
 
     const cond = getConditionCheck(w);
     if (cond) lines.push(`        ${cond}`);
@@ -192,22 +198,21 @@ const exportDoc = (w, context) => {
         if (showWifi) {
             lines.push(`          {`);
             lines.push(`            const char* wifi_icon = "\\U000F092B";`);
-            lines.push(`            if (id(wifi_signal_dbm).has_state()) {`);
-            lines.push(`              float sig = id(wifi_signal_dbm).state;`);
+            lines.push(`            if (id(${wifiId}).has_state()) {`);
+            lines.push(`              float sig = id(${wifiId}).state;`);
             lines.push(`              if (sig >= -50) wifi_icon = "\\U000F0928";`);
             lines.push(`              else if (sig >= -70) wifi_icon = "\\U000F0925";`);
             lines.push(`              else if (sig >= -85) wifi_icon = "\\U000F0922";`);
             lines.push(`              else wifi_icon = "\\U000F091F";`);
             lines.push(`            }`);
             lines.push(`            it.printf(${Math.round(currentX)} - 4, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_RIGHT, "%s", wifi_icon);`);
-            lines.push(`            if (id(wifi_signal_dbm).has_state()) it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0fdB", id(wifi_signal_dbm).state);`);
+            lines.push(`            if (id(${wifiId}).has_state()) it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0fdB", id(${wifiId}).state);`);
             lines.push(`            else it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--dB");`);
             lines.push(`          }`);
             currentX += spacing;
         }
 
         if (showTemp) {
-            const tempId = profile.features?.sht4x ? "sht4x_temperature" : (profile.features?.sht3x ? "sht3x_temperature" : "shtc3_temperature");
             const unit = p.unit || "°C";
             lines.push(`          {`);
             lines.push(`            it.printf(${Math.round(currentX)} - 4, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_RIGHT, "\\U000F050F");`);
@@ -225,7 +230,6 @@ const exportDoc = (w, context) => {
         }
 
         if (showHum) {
-            const humId = profile.features?.sht4x ? "sht4x_humidity" : (profile.features?.sht3x ? "sht3x_humidity" : "shtc3_humidity");
             lines.push(`          {`);
             lines.push(`            it.printf(${Math.round(currentX)} - 4, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_RIGHT, "\\U000F058E");`);
             lines.push(`            if (id(${humId}).has_state()) it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0f%%", id(${humId}).state);`);
@@ -237,13 +241,13 @@ const exportDoc = (w, context) => {
         if (showBat) {
             lines.push(`          {`);
             lines.push(`            const char* bat_icon = "\\U000F0082";`);
-            lines.push(`            float lvl = id(battery_level).state;`);
+            lines.push(`            float lvl = id(${batId}).state;`);
             lines.push(`            if (lvl >= 90) bat_icon = "\\U000F0079";`);
             lines.push(`            else if (lvl >= 50) bat_icon = "\\U000F007E";`);
             lines.push(`            else if (lvl >= 20) bat_icon = "\\U000F007B";`);
             lines.push(`            else bat_icon = "\\U000F0083";`);
             lines.push(`            it.printf(${Math.round(currentX)} - 4, ${centerY}, id(${iconFontRef}), ${color}, TextAlign::CENTER_RIGHT, "%s", bat_icon);`);
-            lines.push(`            if (id(battery_level).has_state()) it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0f%%", id(battery_level).state);`);
+            lines.push(`            if (id(${batId}).has_state()) it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "%.0f%%", id(${batId}).state);`);
             lines.push(`            else it.printf(${Math.round(currentX)} + 4, ${centerY}, id(${textFontRef}), ${color}, TextAlign::CENTER_LEFT, "--%%");`);
             lines.push(`          }`);
         }
@@ -259,40 +263,74 @@ const onExportNumericSensors = (context) => {
     const barWidgets = widgets.filter(w => w.type === "template_sensor_bar");
     if (barWidgets.length === 0) return;
 
-    let wifiNeeded = false;
-    let tempNeeded = false;
-    let humNeeded = false;
-    let batNeeded = false;
+    const autoRegister = (entityId) => {
+        if (!entityId || !entityId.includes(".") || entityId.startsWith("text_sensor.") || entityId.startsWith("binary_sensor.")) return;
+        if (lines.some(l => l.includes(`entity_id: ${entityId}`))) return;
+
+        const safeId = entityId.replace(/[^a-zA-Z0-9_]/g, "_");
+        lines.push("- platform: homeassistant");
+        lines.push(`  id: ${safeId}`);
+        lines.push(`  entity_id: ${entityId}`);
+        lines.push(`  internal: true`);
+    };
 
     barWidgets.forEach(w => {
         const p = w.props || {};
-        if (p.show_wifi !== false) wifiNeeded = true;
-        if (p.show_temperature !== false) tempNeeded = true;
-        if (p.show_humidity !== false) humNeeded = true;
-        if (p.show_battery !== false) batNeeded = true;
+        if (p.show_wifi !== false) {
+            if (p.wifi_entity) autoRegister(p.wifi_entity);
+            else if (!lines.some(l => l.includes("id: wifi_signal_dbm"))) {
+                lines.push("- platform: wifi_signal");
+                lines.push("  id: wifi_signal_dbm");
+                lines.push("  internal: true");
+            }
+        }
+        if (p.show_battery !== false) {
+            if (p.bat_entity) autoRegister(p.bat_entity);
+            else if (!lines.some(l => l.includes("id: battery_level"))) {
+                // Fallback for devices where battery is not auto-defined by hardware generators
+                lines.push("- platform: template");
+                lines.push("  id: battery_level");
+                lines.push("  name: \"Battery Level\"");
+                lines.push("  unit_of_measurement: '%'");
+                lines.push("  update_interval: 60s");
+                lines.push("  internal: true");
+            }
+        }
+        if (p.show_temperature !== false) {
+            if (p.temp_entity) autoRegister(p.temp_entity);
+            // Internal SHT handled below if needed
+        }
+        if (p.show_humidity !== false) {
+            if (p.hum_entity) autoRegister(p.hum_entity);
+            // Internal SHT handled below if needed
+        }
     });
 
-    if (wifiNeeded && !lines.some(l => l.includes("id: wifi_signal_dbm"))) {
-        lines.push("- platform: wifi_signal");
-        lines.push("  id: wifi_signal_dbm");
-        lines.push("  update_interval: 60s");
-        lines.push("  internal: true");
-    }
+    // Check if internal SHT sensors are still needed (no override for at least one bar)
+    const needsInternalSHT = barWidgets.some(w => {
+        const p = w.props || {};
+        return (p.show_temperature !== false && !p.temp_entity) || (p.show_humidity !== false && !p.hum_entity);
+    });
 
-    if (tempNeeded || humNeeded) {
+    if (needsInternalSHT) {
         const shtId = profile.features?.sht4x ? "sht4x_sensor" : (profile.features?.sht3x ? "sht3x_sensor" : "shtc3_sensor");
         const shtPlatform = profile.features?.sht4x ? "sht4x" : (profile.features?.sht3x ? "sht3x" : "shtc3");
 
         if (!lines.some(l => l.includes(`id: ${shtId}`))) {
             lines.push(`- platform: ${shtPlatform}`);
             lines.push(`  id: ${shtId}`);
-            if (tempNeeded) {
+
+            // Check specifically for temp vs hum need
+            const needsTemp = barWidgets.some(w => w.props?.show_temperature !== false && !w.props?.temp_entity);
+            const needsHum = barWidgets.some(w => w.props?.show_humidity !== false && !w.props?.hum_entity);
+
+            if (needsTemp) {
                 const tempId = profile.features?.sht4x ? "sht4x_temperature" : (profile.features?.sht3x ? "sht3x_temperature" : "shtc3_temperature");
                 lines.push("  temperature:");
                 lines.push(`    id: ${tempId}`);
                 lines.push("    internal: true");
             }
-            if (humNeeded) {
+            if (needsHum) {
                 const humId = profile.features?.sht4x ? "sht4x_humidity" : (profile.features?.sht3x ? "sht3x_humidity" : "shtc3_humidity");
                 lines.push("  humidity:");
                 lines.push(`    id: ${humId}`);
@@ -300,16 +338,6 @@ const onExportNumericSensors = (context) => {
             }
             lines.push("  update_interval: 60s");
         }
-    }
-
-    if (batNeeded && !lines.some(l => l.includes("id: battery_level"))) {
-        // Fallback for devices where battery is not auto-defined by hardware generators
-        lines.push("- platform: template");
-        lines.push("  id: battery_level");
-        lines.push("  name: \"Battery Level\"");
-        lines.push("  unit_of_measurement: '%'");
-        lines.push("  update_interval: 60s");
-        lines.push("  internal: true");
     }
 };
 
@@ -386,7 +414,7 @@ export default {
         }
 
         if (showTemp) {
-            const tempId = profile.features?.sht4x ? "sht4x_temperature" : (profile.features?.sht3x ? "sht3x_temperature" : "shtc3_temperature");
+            const tempId = (p.temp_entity || (profile.features?.sht4x ? "sht4x_temperature" : (profile.features?.sht3x ? "sht3x_temperature" : "shtc3_temperature"))).replace(/[^a-zA-Z0-9_]/g, "_");
             const unit = p.unit || "°C";
             let tempExpr = `id(${tempId}).state`;
             if (unit === "°F") tempExpr = `(${tempId}.state * 9.0 / 5.0 + 32.0)`;
@@ -404,7 +432,7 @@ export default {
         }
 
         if (showHum) {
-            const humId = profile.features?.sht4x ? "sht4x_humidity" : (profile.features?.sht3x ? "sht3x_humidity" : "shtc3_humidity");
+            const humId = (p.hum_entity || (profile.features?.sht4x ? "sht4x_humidity" : (profile.features?.sht3x ? "sht3x_humidity" : "shtc3_humidity"))).replace(/[^a-zA-Z0-9_]/g, "_");
             widgets.push({
                 obj: {
                     width: "SIZE_CONTENT", height: "SIZE_CONTENT", bg_opa: "TRANSP", border_width: 0,
@@ -418,8 +446,9 @@ export default {
         }
 
         if (showBat) {
+            const batId = (p.bat_entity || "battery_level").replace(/[^a-zA-Z0-9_]/g, "_");
             let batIconL = '!lambda |-\n';
-            batIconL += '              float lvl = id(battery_level).state;\n';
+            batIconL += `              float lvl = id(${batId}).state;\n`;
             batIconL += '              if (lvl >= 90) return "\\U000F0079";\n';
             batIconL += '              else if (lvl >= 50) return "\\U000F007E";\n';
             batIconL += '              else if (lvl >= 20) return "\\U000F007B";\n';
@@ -431,7 +460,7 @@ export default {
                     layout: "FLEX", flex_flow: "ROW", flex_align_main: "CENTER", flex_align_cross: "CENTER",
                     pad_all: 0, widgets: [
                         { label: { text: batIconL, text_font: iconFont, text_color: color } },
-                        { label: { text: '!lambda "return id(battery_level).has_state() ? str_sprintf(\'%.0f%%\', id(battery_level).state).c_str() : \'--%\';"', text_font: textFont, text_color: color, x: 4 } }
+                        { label: { text: `!lambda "return id(${batId}).has_state() ? str_sprintf(\'%.0f%%\', id(${batId}).state).c_str() : \'--%\';"`, text_font: textFont, text_color: color, x: 4 } }
                     ]
                 }
             });
@@ -454,4 +483,3 @@ export default {
     onExportNumericSensors,
     collectRequirements
 };
-

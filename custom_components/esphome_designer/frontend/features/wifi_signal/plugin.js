@@ -80,7 +80,7 @@ const exportDoc = (w, context) => {
     if (isLocal) {
         sensorId = "wifi_signal_dbm";
     } else {
-        sensorId = entityId ? entityId.replace(/^sensor\./, "").replace(/\./g, "_").replace(/-/g, "_") : "wifi_signal_dbm";
+        sensorId = entityId ? entityId.replace(/[^a-zA-Z0-9_]/g, "_") : "wifi_signal_dbm";
     }
 
     lines.push(`        // widget:wifi_signal id:${w.id} type:wifi_signal x:${w.x} y:${w.y} w:${w.width} h:${w.height} entity:${entityId || "wifi_signal_dbm"} size:${size} font_size:${fontSize} color:${colorProp} show_dbm:${showDbm} local:${isLocal} ${getCondProps(w)}`);

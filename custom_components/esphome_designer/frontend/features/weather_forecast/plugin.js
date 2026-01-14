@@ -159,6 +159,25 @@ const exportDoc = (w, context) => {
     lines.push(`            return std::string(buf);`);
     lines.push(`          };`);
 
+    // Background fill
+    const bgColor = p.background_color || "white";
+    if (bgColor && bgColor !== "transparent") {
+        const bgColorConst = getColorConst(bgColor);
+        lines.push(`          it.filled_rectangle(${w.x}, ${w.y}, ${w.width}, ${w.height}, ${bgColorConst});`);
+        addDitherMask(lines, bgColor, isEpaper, w.x, w.y, w.width, w.height);
+    }
+
+    // Border
+    const showBorder = p.show_border !== false;
+    if (showBorder) {
+        const borderW = parseInt(p.border_width || 1, 10);
+        const borderColorProp = p.border_color || colorProp;
+        const borderColorConst = getColorConst(borderColorProp);
+        lines.push(`          for (int i = 0; i < ${borderW}; i++) {`);
+        lines.push(`            it.rectangle(${w.x} + i, ${w.y} + i, ${w.width} - 2 * i, ${w.height} - 2 * i, ${borderColorConst});`);
+        lines.push(`          }`);
+    }
+
     const isHorizontal = layout === "horizontal";
     const xInc = isHorizontal ? Math.floor(w.width / 5) : 0;
     const yInc = isHorizontal ? 0 : Math.floor(w.height / 5);

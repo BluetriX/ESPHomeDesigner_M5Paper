@@ -41,6 +41,10 @@ const render = (el, widget, { getColorStyle }) => {
         el.appendChild(timeDiv);
     } else if (format === "date_only") {
         el.appendChild(dateDiv);
+    } else if (format === "weekday_day_month") {
+        // European/international date format: "Monday 01 January"
+        dateDiv.textContent = "Monday 01 January";
+        el.appendChild(dateDiv);
     } else {
         el.appendChild(timeDiv);
         el.appendChild(dateDiv);
@@ -68,6 +72,8 @@ export default {
         let fmt = "%H:%M"; // Default time_only or fallback
         if (format === "date_only") {
             fmt = "%d.%m.%Y";
+        } else if (format === "weekday_day_month") {
+            fmt = "%A %d %B"; // International: Monday 01 January
         } else if (format === "time_date") {
             fmt = "%H:%M\\n%a, %b %d";
         }
@@ -125,6 +131,10 @@ export default {
         } else if (format === "date_only") {
             const y = getAlignY ? getAlignY(textAlign, w.y, w.height) : w.y;
             lines.push(`          it.strftime(${x}, ${y}, id(${dateFontId}), ${color}, ${align}, "%d.%m.%Y", now);`);
+        } else if (format === "weekday_day_month") {
+            // International format: "Monday 01 January"
+            const y = getAlignY ? getAlignY(textAlign, w.y, w.height) : w.y;
+            lines.push(`          it.strftime(${x}, ${y}, id(${dateFontId}), ${color}, ${align}, "%A %d %B", now);`);
         } else {
             // Multi-line
             const totalH = timeSize + dateSize + 2;
