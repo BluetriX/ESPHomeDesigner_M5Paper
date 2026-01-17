@@ -1215,6 +1215,9 @@ export class PropertiesPanel {
             // Refresh interval
             const refreshOptions = ["15min", "30min", "1h", "2h", "4h", "8h", "12h", "24h"];
             this.addSelect("Refresh Interval", props.refresh_interval || "24h", refreshOptions, (v) => updateProp("refresh_interval", v));
+
+            this.addLabeledInput("Home Assistant URL", "text", props.ha_url || "http://homeassistant.local:8123", (v) => updateProp("ha_url", v));
+            this.addHint("Address of your Home Assistant instance (for Proxy)");
             this.endSection();
 
             this.createSection("Typography", false);

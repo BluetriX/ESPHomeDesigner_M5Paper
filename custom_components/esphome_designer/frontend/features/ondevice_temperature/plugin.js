@@ -108,7 +108,7 @@ export default {
     render,
     exportLVGL: (w, { common, convertColor, getLVGLFont, profile }) => {
         const p = w.props || {};
-        const isLocal = p.is_local_sensor !== false;
+        const isLocal = p.is_local_sensor === true || (p.is_local_sensor !== false && !w.entity_id);
         let sensorId = "onboard_temperature";
         if (isLocal && profile.features) {
             sensorId = profile.features.sht4x ? "sht4x_temperature" : (profile.features.sht3x ? "sht3x_temperature" : (profile.features.shtc3 ? "shtc3_temperature" : "onboard_temperature"));
@@ -214,7 +214,7 @@ export default {
         const iconFontId = addFont("Material Design Icons", 400, iconSize);
         const valueFontId = addFont("Roboto", 400, fontSize);
 
-        const isLocal = p.is_local_sensor !== false;
+        const isLocal = p.is_local_sensor === true || (p.is_local_sensor !== false && !w.entity_id);
         let sensorId = "onboard_temperature";
 
         if (isLocal) {
@@ -273,7 +273,7 @@ export default {
         for (const w of widgets) {
             if (w.type !== "ondevice_temperature") continue;
             const p = w.props || {};
-            if (p.is_local_sensor !== false) {
+            if (p.is_local_sensor === true || (p.is_local_sensor !== false && !w.entity_id)) {
                 needsLocalSHT = true;
                 continue;
             }

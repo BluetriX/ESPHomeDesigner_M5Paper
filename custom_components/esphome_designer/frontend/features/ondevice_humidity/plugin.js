@@ -102,7 +102,7 @@ export default {
     render,
     exportLVGL: (w, { common, convertColor, getLVGLFont, profile }) => {
         const p = w.props || {};
-        const isLocal = p.is_local_sensor !== false;
+        const isLocal = p.is_local_sensor === true || (p.is_local_sensor !== false && !w.entity_id);
         let sensorId = "onboard_humidity";
         if (isLocal && profile.features) {
             sensorId = profile.features.sht4x ? "sht4x_humidity" : (profile.features.sht3x ? "sht3x_humidity" : (profile.features.shtc3 ? "shtc3_humidity" : "onboard_humidity"));
@@ -206,7 +206,7 @@ export default {
         const iconFontId = addFont("Material Design Icons", 400, iconSize);
         const valueFontId = addFont("Roboto", 400, fontSize);
 
-        const isLocal = p.is_local_sensor !== false;
+        const isLocal = p.is_local_sensor === true || (p.is_local_sensor !== false && !w.entity_id);
         let sensorId = "onboard_humidity";
 
         if (isLocal) {
@@ -260,7 +260,7 @@ export default {
         for (const w of widgets) {
             if (w.type !== "ondevice_humidity") continue;
             const p = w.props || {};
-            if (p.is_local_sensor !== false) {
+            if (p.is_local_sensor === true || (p.is_local_sensor !== false && !w.entity_id)) {
                 needsLocalSHT = true;
                 continue;
             }

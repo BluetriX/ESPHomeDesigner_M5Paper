@@ -185,7 +185,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 sidebar_title="ESPHome Designer",
                 sidebar_icon="mdi:tablet-dashboard",
                 frontend_url_path="esphome-designer",
-                config={"url": "/esphome-designer"},
+                config={"url": "/esphome-designer/index.html"},
                 require_admin=False,
             )
             _LOGGER.info("%s: Sidebar panel registered", DOMAIN)

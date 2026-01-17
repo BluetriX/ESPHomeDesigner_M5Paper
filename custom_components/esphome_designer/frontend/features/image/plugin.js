@@ -182,7 +182,7 @@ const onExportComponents = (context) => {
             processed.add(safeId);
 
             const isColor = profile.features?.lcd || (profile.name && (profile.name.includes("6-Color") || profile.name.includes("Color")));
-            const imgType = isColor ? "RGB565" : "TRANSPARENT_BINARY";
+            const imgType = isColor ? "RGB565" : "BINARY";
 
             imageLines.push(`  - file: "${path}"`);
             imageLines.push(`    id: ${safeId}`);
@@ -190,6 +190,7 @@ const onExportComponents = (context) => {
             imageLines.push(`    resize: ${w.width}x${w.height}`);
             if (!isColor) {
                 imageLines.push(`    dither: FLOYDSTEINBERG`);
+                imageLines.push(`    transparency: chroma_key`);
             }
         });
 

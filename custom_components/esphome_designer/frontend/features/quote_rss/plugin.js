@@ -252,36 +252,48 @@ const onExportGlobals = (context) => {
     const { lines, widgets } = context;
     widgets.filter(w => w.type === "quote_rss").forEach(w => {
         const safeIdPrefix = `quote_${w.id.replace(/-/g, "_")}`;
-        lines.push(`  - id: ${safeIdPrefix}_text_global`);
-        lines.push(`    type: std::string`);
-        lines.push(`    restore_value: true`);
-        lines.push(`    initial_value: '""'`);
+        lines.push(`- id: ${safeIdPrefix}_text_global`);
+        lines.push(`  type: std::string`);
+        lines.push(`  restore_value: true`);
+        lines.push(`  initial_value: '""'`);
         if (w.props && w.props.show_author !== false) {
-            lines.push(`  - id: ${safeIdPrefix}_author_global`);
-            lines.push(`    type: std::string`);
-            lines.push(`    restore_value: true`);
-            lines.push(`    initial_value: '""'`);
+            lines.push(`- id: ${safeIdPrefix}_author_global`);
+            lines.push(`  type: std::string`);
+            lines.push(`  restore_value: true`);
+            lines.push(`  initial_value: '""'`);
         }
     });
 };
 
-const onExportTextSensors = (context) => {
+const onExportComponents = (context) => {
     const { lines, widgets, displayId } = context;
     const targets = widgets.filter(w => w.type === "quote_rss");
 
     if (targets.length > 0) {
+        // Ensure http_request is present (critical for this widget)
+        // Check if http_request is already defined in the lines
+        const hasHttpRequest = lines.some(l => l.trim().startsWith("http_request:"));
+        if (!hasHttpRequest) {
+            lines.push("");
+            lines.push("http_request:");
+            lines.push("  verify_ssl: false");
+            lines.push("  timeout: 20s");
+        }
+
         lines.push("");
-        lines.push("  # Quote RSS Widget Update Loop");
+        lines.push("# Quote RSS Widget Update Loop");
         lines.push("interval:");
         for (const w of targets) {
             const p = w.props || {};
             const refreshInterval = p.refresh_interval || "1h";
             const safeIdPrefix = `quote_${w.id.replace(/-/g, "_")}`;
             const feedUrl = p.feed_url || "https://www.brainyquote.com/link/quotebr.rss";
+            const random = p.random !== false;
 
-            // Note: In production, the proxy URL should be the HA internal URL.
-            // Using a relative-ish placeholder for now as the actual URL depends on user setup.
-            const proxyUrl = `/api/esphome_designer/rss_proxy?url=${encodeURIComponent(feedUrl)}`;
+            // Note: ESP device needs absolute URL to reach HA.
+            const haUrl = (p.ha_url || "http://homeassistant.local:8123").replace(/\/$/, "");
+            const proxyEndpoint = "/api/esphome_designer/rss_proxy";
+            const proxyUrl = `${haUrl}${proxyEndpoint}?url=${encodeURIComponent(feedUrl)}${random ? '&random=true' : ''}`;
 
             lines.push(`  - interval: ${refreshInterval}`);
             lines.push(`    startup_delay: 20s`);
@@ -297,17 +309,25 @@ const onExportTextSensors = (context) => {
             lines.push(`                  - lambda: |-`);
             lines.push(`                      if (response->status_code == 200) {`);
             lines.push(`                        DynamicJsonDocument doc(4096);`);
-            lines.push(`                        deserializeJson(doc, body);`);
+            lines.push(`                        DeserializationError error = deserializeJson(doc, body);`);
+            lines.push(`                        if (error) {`);
+            lines.push(`                          ESP_LOGW("quote", "Failed to parse JSON: %s", error.c_str());`);
+            lines.push(`                          return;`);
+            lines.push(`                        }`);
             lines.push(`                        if (doc.containsKey("success") && doc["success"].as<bool>()) {`);
             lines.push(`                          JsonObject q = doc["quote"];`);
             lines.push(`                          if (!q.isNull()) {`);
-            lines.push(`                            id(${safeIdPrefix}_text_global) = q["quote"].as<std::string>();`);
+            lines.push(`                            std::string q_str = q["quote"].as<std::string>();`);
+            lines.push(`                            id(${safeIdPrefix}_text_global) = q_str;`);
             if (p.show_author !== false) {
                 lines.push(`                            id(${safeIdPrefix}_author_global) = q["author"].as<std::string>();`);
             }
+            lines.push(`                            ESP_LOGI("quote", "Fetched quote: %s", q_str.c_str());`);
             lines.push(`                            id(${displayId}).update();`);
             lines.push(`                          }`);
             lines.push(`                        }`);
+            lines.push(`                      } else {`);
+            lines.push(`                        ESP_LOGW("quote", "HTTP Request failed with code: %d", response->status_code);`);
             lines.push(`                      }`);
         }
     }
@@ -330,10 +350,12 @@ export default {
         word_wrap: true,
         width: 400,
         height: 120,
-        refresh_interval: "1h"
+        refresh_interval: "1h",
+        ha_url: "http://homeassistant.local:8123",
+        random: true
     },
     render,
     onExportGlobals,
-    onExportTextSensors,
+    onExportComponents,
     export: exportDoc
 };

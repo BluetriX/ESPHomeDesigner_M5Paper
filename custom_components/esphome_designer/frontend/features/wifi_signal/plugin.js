@@ -88,7 +88,13 @@ const exportDoc = (w, context) => {
     const cond = getConditionCheck(w);
     if (cond) lines.push(`        ${cond}`);
 
-    lines.push(`        {`);
+    // Calculate centering
+    const contentHeight = showDbm ? (size + 2 + fontSize) : size;
+    const paddingY = `(${w.height} - ${contentHeight}) / 2`;
+    const centerX = `${w.x} + ${w.width} / 2`;
+    const iconY = `${w.y} + ${paddingY}`;
+    const textY = `${w.y} + ${paddingY} + ${size} + 2`;
+
     lines.push(`          const char* wifi_icon = "\\U000F092B"; // Default: wifi-strength-alert-outline`);
     lines.push(`          if (id(${sensorId}).has_state()) {`);
     lines.push(`            float signal = id(${sensorId}).state;`);
@@ -99,11 +105,11 @@ const exportDoc = (w, context) => {
     lines.push(`            else if (signal >= -100) wifi_icon = "\\U000F091F"; // wifi-strength-1 (Weak)`);
     lines.push(`            else wifi_icon = "\\U000F092B";                    // wifi-strength-alert-outline`);
     lines.push(`          }`);
-    lines.push(`          it.printf(${w.x}, ${w.y}, id(${fontRef}), ${color}, "%s", wifi_icon);`);
+    lines.push(`          it.printf(${centerX}, ${iconY}, id(${fontRef}), ${color}, TextAlign::TOP_CENTER, "%s", wifi_icon);`);
 
     if (showDbm) {
         lines.push(`          if (id(${sensorId}).has_state()) {`);
-        lines.push(`            it.printf(${w.x} + ${size}/2, ${w.y} + ${size} + 2, id(${dbmFontRef}), ${color}, TextAlign::TOP_CENTER, "%.0fdB", id(${sensorId}).state);`);
+        lines.push(`            it.printf(${centerX}, ${textY}, id(${dbmFontRef}), ${color}, TextAlign::TOP_CENTER, "%.0fdB", id(${sensorId}).state);`);
         lines.push(`          }`);
     }
 

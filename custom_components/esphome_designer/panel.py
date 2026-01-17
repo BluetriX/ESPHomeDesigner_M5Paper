@@ -31,7 +31,7 @@ from .const import API_BASE_PATH
 _LOGGER = logging.getLogger(__name__)
 
 
-PANEL_URL_PATH = "/esphome-designer"
+PANEL_URL_PATH = "/esphome-designer/index.html"
 
 
 class ESPHomeDesignerPanelView(HomeAssistantView):
